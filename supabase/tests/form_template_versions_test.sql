@@ -100,6 +100,18 @@ select results_eq(
   'new custom versions advance only their stable lineage sequence'
 );
 
+-- Created before a Practice default exists: this remains deliberately
+-- unpinned so the late-pinning guard can be exercised below.
+insert into test_form_version_state (key, id, payload)
+select 'consultation_three', (result ->> 'consultation_id')::uuid, result
+from (
+  select public.create_consultation(
+    p_scheduled_at => now() + interval '3 days',
+    p_language => 'en'::public.consultation_language,
+    p_consent_recorded => false
+  ) as result
+) created;
+
 select ok(
   (select public.set_default_form_template_version(id) ->> 'ok' = 'true'
    from test_form_version_state where key = 'owner_version'),
@@ -159,16 +171,6 @@ select ok(
    where c.key = 'consultation_two' and v.key = 'built_in'),
   'a consultation can explicitly pin an accessible built-in version'
 );
-
-insert into test_form_version_state (key, id, payload)
-select 'consultation_three', (result ->> 'consultation_id')::uuid, result
-from (
-  select public.create_consultation(
-    p_scheduled_at => now() + interval '3 days',
-    p_language => 'en'::public.consultation_language,
-    p_consent_recorded => false
-  ) as result
-) created;
 
 set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 

@@ -274,6 +274,11 @@ begin
     return private.refuse('NOT_FOUND');
   end if;
 
+  if p_version_id is not null
+     and not private.form_template_version_accessible(v_user, p_version_id) then
+    return private.refuse('FORM_TEMPLATE_VERSION_NOT_FOUND');
+  end if;
+
   if v_consultation.form_template_version_id is not null then
     if p_version_id is null
        or p_version_id = v_consultation.form_template_version_id then

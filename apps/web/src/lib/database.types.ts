@@ -552,10 +552,12 @@ export type Database = {
           approved_by: string | null
           consultation_id: string
           created_at: string
+          form_template_version_id: string | null
           id: string
           job_id: string
           status: string
           template: Json
+          template_hash: string
           transcript_id: string
         }
         Insert: {
@@ -563,10 +565,12 @@ export type Database = {
           approved_by?: string | null
           consultation_id: string
           created_at?: string
+          form_template_version_id?: string | null
           id?: string
           job_id: string
           status?: string
           template: Json
+          template_hash?: never
           transcript_id: string
         }
         Update: {
@@ -574,10 +578,12 @@ export type Database = {
           approved_by?: string | null
           consultation_id?: string
           created_at?: string
+          form_template_version_id?: string | null
           id?: string
           job_id?: string
           status?: string
           template?: Json
+          template_hash?: never
           transcript_id?: string
         }
         Relationships: [
@@ -593,6 +599,13 @@ export type Database = {
             columns: ["job_id"]
             isOneToOne: true
             referencedRelation: "form_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forms_form_template_version_id_fkey"
+            columns: ["form_template_version_id"]
+            isOneToOne: false
+            referencedRelation: "form_template_versions"
             referencedColumns: ["id"]
           },
           {
