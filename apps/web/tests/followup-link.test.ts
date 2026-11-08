@@ -48,6 +48,15 @@ async function previousId(who: Practitioner, consultationId: string) {
   return (data as { previous_consultation_id: string | null }).previous_consultation_id;
 }
 
+async function consultationPatientId(who: Practitioner, consultationId: string) {
+  const { data, error } = await who.client.from("consultations")
+    .select("patient_id")
+    .eq("id", consultationId)
+    .single();
+  if (error) throw error;
+  return (data as { patient_id: string | null }).patient_id;
+}
+
 describe("explicit previous-consultation links", () => {
   it("links an owned later consultation to the same confirmed patient and audits identifiers only", async () => {
     const patientId = patientFor(eva);
@@ -135,5 +144,67 @@ describe("explicit previous-consultation links", () => {
       p_previous_consultation_id: later,
     })).toEqual({ ok: false, error_category: "CYCLE_DETECTED" });
     expect(await previousId(eva, earlier)).toBeNull();
+  });
+
+  it("unlinks before processing and audits the removed identifier", async () => {
+    const patientId = patientFor(eva);
+    const previous = await consultation(eva, "2026-11-14T09:00:00Z");
+    const current = await consultation(eva, "2026-11-21T09:00:00Z");
+    await confirmPatient(eva, previous, patientId);
+    await confirmPatient(eva, current, patientId);
+    await rpc(eva.client, "link_previous_consultation", {
+      p_consultation_id: current,
+      p_previous_consultation_id: previous,
+    });
+
+    expect(await rpc(eva.client, "link_previous_consultation", {
+      p_consultation_id: current,
+      p_previous_consultation_id: null,
+    })).toEqual({ ok: true, consultation_id: current, previous_consultation_id: null });
+    expect(await previousId(eva, current)).toBeNull();
+
+    const event = JSON.parse(sqlAsOwner(`
+      select json_build_object('resource_id', resource_id, 'metadata', metadata_without_clinical_content)
+      from public.audit_events
+      where consultation_id = '${current}' and event_type = 'consultation.previous_unlinked'
+      order by seq desc limit 1;
+    `));
+    expect(event).toEqual({ resource_id: previous, metadata: {} });
+  });
+
+  it("rejects link changes after audio processing begins", async () => {
+    const patientId = patientFor(eva);
+    const previous = await consultation(eva, "2026-11-15T09:00:00Z");
+    const current = await consultation(eva, "2026-11-22T09:00:00Z");
+    await confirmPatient(eva, previous, patientId);
+    await confirmPatient(eva, current, patientId);
+    sqlAsOwner(`update public.consultations set status = 'audio_imported' where id = '${current}';`);
+
+    expect(await rpc(eva.client, "link_previous_consultation", {
+      p_consultation_id: current,
+      p_previous_consultation_id: previous,
+    })).toEqual({ ok: false, error_category: "PREVIOUS_LINK_TOO_LATE" });
+    expect(await previousId(eva, current)).toBeNull();
+  });
+
+  it("blocks patient reassignment while either side of a link still depends on it", async () => {
+    const firstPatient = patientFor(eva);
+    const secondPatient = patientFor(eva);
+    const previous = await consultation(eva, "2026-11-16T09:00:00Z");
+    const current = await consultation(eva, "2026-11-23T09:00:00Z");
+    await confirmPatient(eva, previous, firstPatient);
+    await confirmPatient(eva, current, firstPatient);
+    await rpc(eva.client, "link_previous_consultation", {
+      p_consultation_id: current,
+      p_previous_consultation_id: previous,
+    });
+
+    await expect(rpc(eva.client, "patient_review_association", {
+      p_consultation_id: previous,
+      p_patient_id: secondPatient,
+      p_decision: "confirm",
+    })).rejects.toThrow("unlink the previous consultation before changing patient identity");
+    expect(await consultationPatientId(eva, previous)).toBe(firstPatient);
+    expect(await previousId(eva, current)).toBe(previous);
   });
 });
