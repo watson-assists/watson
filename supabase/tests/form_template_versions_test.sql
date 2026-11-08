@@ -1,6 +1,6 @@
 begin;
 
-select plan(23);
+select plan(33);
 
 insert into auth.users (id, email)
 values
@@ -17,6 +17,7 @@ create temporary table test_form_version_state (
   id uuid,
   payload jsonb
 );
+grant select, insert, update, delete on test_form_version_state to authenticated;
 
 insert into test_form_version_state (key, id)
 select 'built_in', id
@@ -27,6 +28,25 @@ select is(
   (select count(*) from test_form_version_state where key = 'built_in'),
   1::bigint,
   'the built-in form is represented by one immutable version'
+);
+
+select results_eq(
+  $$select template_key from public.form_template_versions where is_built_in$$,
+  array['watson_standard'],
+  'the existing built-in has a stable product key'
+);
+
+select results_eq(
+  $$select schema_version from public.form_template_versions where is_built_in$$,
+  array[1],
+  'the existing built-in records its definition schema version'
+);
+
+select ok(
+  (select definition_hash ~ '^[0-9a-f]{64}$'
+     and definition_hash = private.form_template_definition_hash(definition)
+   from public.form_template_versions where is_built_in),
+  'the built-in stores a canonical definition hash'
 );
 
 set local role authenticated;
@@ -56,6 +76,28 @@ select results_eq(
     where id = (select id from test_form_version_state where key = 'owner_version')$$,
   array[1],
   'practitioner versions receive a stable sequence number'
+);
+
+select results_eq(
+  $$select template_key, schema_version from public.form_template_versions
+    where id = (select id from test_form_version_state where key = 'owner_version')$$,
+  $$values ('custom'::text, 1)$$,
+  'custom versions use a stable lineage key and schema version'
+);
+
+insert into test_form_version_state (key, id, payload)
+select 'owner_version_two', (result ->> 'version_id')::uuid, result
+from (
+  select public.create_form_template_version(
+    '{"title":"Version two","sections":[{"title":"Summary","fields":[{"key":"summary","label":"Summary","mode":"extract"}]}]}'::jsonb
+  ) as result
+) created;
+
+select results_eq(
+  $$select template_key, version_number from public.form_template_versions
+    where id = (select id from test_form_version_state where key = 'owner_version_two')$$,
+  $$values ('custom'::text, 2)$$,
+  'new custom versions advance only their stable lineage sequence'
 );
 
 select ok(
@@ -118,6 +160,16 @@ select ok(
   'a consultation can explicitly pin an accessible built-in version'
 );
 
+insert into test_form_version_state (key, id, payload)
+select 'consultation_three', (result ->> 'consultation_id')::uuid, result
+from (
+  select public.create_consultation(
+    p_scheduled_at => now() + interval '3 days',
+    p_language => 'en'::public.consultation_language,
+    p_consent_recorded => false
+  ) as result
+) created;
+
 set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 
 insert into test_form_version_state (key, id, payload)
@@ -125,6 +177,16 @@ select 'other_version', (result ->> 'version_id')::uuid, result
 from (
   select public.create_form_template_version(
     '{"title":"Other version","sections":[{"title":"Other","fields":[{"key":"other","label":"Other","mode":"manual"}]}]}'::jsonb
+  ) as result
+) created;
+
+insert into test_form_version_state (key, id, payload)
+select 'other_consultation', (result ->> 'consultation_id')::uuid, result
+from (
+  select public.create_consultation(
+    p_scheduled_at => now() + interval '4 days',
+    p_language => 'en'::public.consultation_language,
+    p_consent_recorded => false
   ) as result
 ) created;
 
@@ -145,9 +207,18 @@ select is(
   (select public.pin_consultation_form_template(c.id, v.id) ->> 'error_category'
    from test_form_version_state c
    cross join test_form_version_state v
-   where c.key = 'consultation_two' and v.key = 'other_version'),
+   where c.key = 'consultation_three' and v.key = 'other_version'),
   'FORM_TEMPLATE_VERSION_NOT_FOUND',
   'a practitioner cannot pin another practitioner''s version'
+);
+
+select is(
+  (select public.pin_consultation_form_template(c.id, v.id) ->> 'error_category'
+   from test_form_version_state c
+   cross join test_form_version_state v
+   where c.key = 'other_consultation' and v.key = 'built_in'),
+  'NOT_FOUND',
+  'a practitioner cannot pin another practitioner''s consultation'
 );
 
 select is(
@@ -164,6 +235,22 @@ select is(
    where c.key = 'consultation_one' and v.key = 'built_in'),
   'FORM_TEMPLATE_ALREADY_PINNED',
   'a pinned consultation cannot be repinned to another version'
+);
+
+reset role;
+update public.consultations
+set status = 'audio_imported'
+where id = (select id from test_form_version_state where key = 'consultation_three');
+set local role authenticated;
+set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+
+select is(
+  (select public.pin_consultation_form_template(c.id, v.id) ->> 'error_category'
+   from test_form_version_state c
+   cross join test_form_version_state v
+   where c.key = 'consultation_three' and v.key = 'built_in'),
+  'FORM_TEMPLATE_PIN_TOO_LATE',
+  'template pinning is rejected after audio processing starts'
 );
 
 select results_eq(
@@ -189,6 +276,39 @@ select ok(
 );
 
 reset role;
+
+select throws_ok(
+  format(
+    'update public.consultations set form_template_version_id = %L::uuid where id = %L::uuid',
+    (select id from test_form_version_state where key = 'built_in'),
+    (select id from test_form_version_state where key = 'consultation_three')
+  ),
+  '55000',
+  'a consultation form template version can only be pinned before processing',
+  'the database trigger also rejects privileged late pinning'
+);
+
+select lives_ok(
+  $$insert into public.form_template_versions (
+      template_key, version_number, schema_version, definition, is_built_in, origin
+    ) values (
+      'massage_assessment_en_sk', 1, 2,
+      private.watson_form(), true, 'built_in'
+    )$$,
+  'another built-in template key can start at version one'
+);
+
+select throws_ok(
+  $$insert into public.form_template_versions (
+      template_key, version_number, schema_version, definition, is_built_in, origin
+    ) values (
+      'massage_assessment_en_sk', 1, 2,
+      private.watson_form(), true, 'built_in'
+    )$$,
+  '23505',
+  null,
+  'the same template key and version cannot be published twice'
+);
 
 select throws_ok(
   format(
