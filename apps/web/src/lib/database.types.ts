@@ -171,6 +171,7 @@ export type Database = {
           created_at: string
           duration_minutes: number
           fee_cents: number | null
+          form_template_version_id: string | null
           google_event_id: string | null
           hold_until: string | null
           id: string
@@ -187,6 +188,7 @@ export type Database = {
           patient_claim_phone: string | null
           patient_claim_updated_at: string | null
           patient_id: string | null
+          previous_consultation_id: string | null
           practitioner_id: string
           recorded_together: boolean
           remind_whatsapp: boolean
@@ -209,6 +211,7 @@ export type Database = {
           created_at?: string
           duration_minutes?: number
           fee_cents?: number | null
+          form_template_version_id?: string | null
           google_event_id?: string | null
           hold_until?: string | null
           id?: string
@@ -225,6 +228,7 @@ export type Database = {
           patient_claim_phone?: string | null
           patient_claim_updated_at?: string | null
           patient_id?: string | null
+          previous_consultation_id?: string | null
           practitioner_id: string
           recorded_together?: boolean
           remind_whatsapp?: boolean
@@ -247,6 +251,7 @@ export type Database = {
           created_at?: string
           duration_minutes?: number
           fee_cents?: number | null
+          form_template_version_id?: string | null
           google_event_id?: string | null
           hold_until?: string | null
           id?: string
@@ -263,6 +268,7 @@ export type Database = {
           patient_claim_phone?: string | null
           patient_claim_updated_at?: string | null
           patient_id?: string | null
+          previous_consultation_id?: string | null
           practitioner_id?: string
           recorded_together?: boolean
           remind_whatsapp?: boolean
@@ -278,10 +284,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "consultations_form_template_version_id_fkey"
+            columns: ["form_template_version_id"]
+            isOneToOne: false
+            referencedRelation: "form_template_versions"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "consultations_patient_id_fkey"
             columns: ["patient_id"]
             isOneToOne: false
             referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultations_previous_consultation_id_fkey"
+            columns: ["previous_consultation_id"]
+            isOneToOne: false
+            referencedRelation: "consultations"
             referencedColumns: ["id"]
           },
         ]
@@ -436,6 +456,77 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      form_template_defaults: {
+        Row: {
+          form_template_version_id: string
+          practitioner_id: string
+          updated_at: string
+          updated_by: string
+        }
+        Insert: {
+          form_template_version_id: string
+          practitioner_id: string
+          updated_at?: string
+          updated_by: string
+        }
+        Update: {
+          form_template_version_id?: string
+          practitioner_id?: string
+          updated_at?: string
+          updated_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_template_defaults_form_template_version_id_fkey"
+            columns: ["form_template_version_id"]
+            isOneToOne: false
+            referencedRelation: "form_template_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      form_template_versions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          definition: Json
+          definition_hash: string | null
+          id: string
+          is_built_in: boolean
+          origin: string
+          practitioner_id: string | null
+          schema_version: number
+          template_key: string
+          version_number: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          definition: Json
+          definition_hash?: never
+          id?: string
+          is_built_in?: boolean
+          origin: string
+          practitioner_id?: string | null
+          schema_version: number
+          template_key: string
+          version_number: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          definition?: Json
+          definition_hash?: never
+          id?: string
+          is_built_in?: boolean
+          origin?: string
+          practitioner_id?: string | null
+          schema_version?: number
+          template_key?: string
+          version_number?: number
+        }
+        Relationships: []
       }
       form_templates: {
         Row: {
@@ -1144,6 +1235,10 @@ export type Database = {
         }
         Returns: Json
       }
+      create_form_template_version: {
+        Args: { p_definition: Json }
+        Returns: Json
+      }
       current_user_roles: { Args: never; Returns: string[] }
       declare_recorded_together: {
         Args: { p_consultation_id: string; p_recorded_together: boolean }
@@ -1249,6 +1344,13 @@ export type Database = {
         Args: { p_code_hash: string; p_contact_hash: string; p_ip_hash: string }
         Returns: Json
       }
+      link_previous_consultation: {
+        Args: {
+          p_consultation_id: string
+          p_previous_consultation_id: string | null
+        }
+        Returns: Json
+      }
       make_consultation_free: {
         Args: { p_consultation_id: string }
         Returns: Json
@@ -1282,6 +1384,10 @@ export type Database = {
           p_decision: string
           p_patient_id: string
         }
+        Returns: Json
+      }
+      pin_consultation_form_template: {
+        Args: { p_consultation_id: string; p_version_id?: string }
         Returns: Json
       }
       provision_patient_role_after_otp: {
@@ -1358,6 +1464,10 @@ export type Database = {
           p_length_minutes: number
           p_offer: string
         }
+        Returns: Json
+      }
+      set_default_form_template_version: {
+        Args: { p_version_id: string }
         Returns: Json
       }
       set_form_template: { Args: { p_definition: Json }; Returns: Json }
@@ -1632,4 +1742,3 @@ export const Constants = {
     },
   },
 } as const
-
