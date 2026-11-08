@@ -62,13 +62,48 @@ as $$
   where d.practitioner_id = p_practitioner_id
     and c.practitioner_id = p_practitioner_id
     and c.form_template_version_id is null
-    and c.status in ('consent_pending', 'ready_for_audio')
-    and not exists (
-      select 1 from public.audio_tracks a where a.consultation_id = c.id
+    and (
+      (
+        c.status in ('consent_pending', 'ready_for_audio')
+        and not exists (
+          select 1 from public.audio_tracks a where a.consultation_id = c.id
+        )
+        and not exists (
+          select 1 from public.live_pieces p where p.consultation_id = c.id
+        )
+      )
+      or c.status in (
+        'transcript_ready', 'transcript_under_review',
+        'transcript_reviewed', 'extraction_failed'
+      )
     )
     and not exists (
-      select 1 from public.live_pieces p where p.consultation_id = c.id
+      select 1 from public.form_jobs j where j.consultation_id = c.id
     );
+
+  update public.consultations c
+  set form_template_version_id = d.form_template_version_id,
+      updated_at = now()
+  from public.form_template_defaults d
+  join public.form_template_versions v on v.id = d.form_template_version_id
+  where d.practitioner_id = p_practitioner_id
+    and c.practitioner_id = p_practitioner_id
+    and c.form_template_version_id is null
+    and exists (
+      select 1 from public.forms f
+      where f.consultation_id = c.id
+        and f.status <> 'superseded'
+        and f.template = v.definition
+    );
+
+  update public.forms f
+  set form_template_version_id = c.form_template_version_id
+  from public.consultations c
+  join public.form_template_versions v on v.id = c.form_template_version_id
+  where c.practitioner_id = p_practitioner_id
+    and f.consultation_id = c.id
+    and f.form_template_version_id is null
+    and f.template = v.definition;
 $$;
 
 create or replace function public.set_form_template(p_definition jsonb) returns jsonb

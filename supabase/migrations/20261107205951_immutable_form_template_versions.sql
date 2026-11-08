@@ -111,7 +111,21 @@ begin
     end if;
     if v_version_id is not null
        and (tg_op = 'INSERT' or old.form_template_version_id is null)
-       and new.status not in ('consent_pending', 'ready_for_audio') then
+       and new.status not in ('consent_pending', 'ready_for_audio')
+       and not (
+         new.status in ('transcript_ready', 'transcript_under_review', 'transcript_reviewed', 'extraction_failed')
+         and not exists (
+           select 1 from public.form_jobs j where j.consultation_id = new.id
+         )
+       )
+       and not exists (
+         select 1
+         from public.forms f
+         join public.form_template_versions v on v.id = v_version_id
+         where f.consultation_id = new.id
+           and f.status <> 'superseded'
+           and f.template = v.definition
+       ) then
       raise exception using
         errcode = '55000',
         message = 'a consultation form template version can only be pinned before processing';
@@ -290,7 +304,21 @@ begin
     return private.refuse('FORM_TEMPLATE_ALREADY_PINNED');
   end if;
 
-  if v_consultation.status not in ('consent_pending', 'ready_for_audio') then
+  if v_consultation.status not in ('consent_pending', 'ready_for_audio')
+     and not (
+       v_consultation.status in ('transcript_ready', 'transcript_under_review', 'transcript_reviewed', 'extraction_failed')
+       and not exists (
+         select 1 from public.form_jobs j where j.consultation_id = v_consultation.id
+       )
+     )
+     and not exists (
+       select 1
+       from public.forms f
+       join public.form_template_versions v on v.id = p_version_id
+       where f.consultation_id = v_consultation.id
+         and f.status <> 'superseded'
+         and f.template = v.definition
+     ) then
     return private.refuse('FORM_TEMPLATE_PIN_TOO_LATE');
   end if;
 
