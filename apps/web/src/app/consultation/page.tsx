@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, Video } from "lucide-react";
+import { Archive, ChevronLeft, Video } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
@@ -12,7 +12,7 @@ import { JobPanel } from "@/components/job-panel";
 import { PatientCheck, type Candidate } from "@/components/patient-check";
 import { PatientPanel } from "@/components/patient-panel";
 import { euros } from "@/lib/fee";
-import { Journey, Notice } from "@/components/status";
+import { Journey, Notice, StatusChip } from "@/components/status";
 import { TranscriptView } from "@/components/transcript-view";
 import { call, explain, isId } from "@/lib/api";
 import { clock, humanSize } from "@/lib/audio";
@@ -26,9 +26,10 @@ import { supabase } from "@/lib/supabase";
 type Consultation = Tables<"consultations">;
 type Track = Tables<"audio_tracks">;
 type Patient = Pick<Tables<"patients">, "id" | "name" | "phone" | "email">;
+type History = Pick<Consultation, "id" | "scheduled_at" | "language" | "status">;
 type Loaded = {
-  consultation: Consultation; tracks: Track[]; audioLeft: boolean; patient: Patient | null;
-  shown: Shown | null; candidate: Candidate | null;
+  consultation: Consultation; tracks: Track[]; audioLeft: boolean; hasTranscript: boolean; patient: Patient | null;
+  shown: Shown | null; candidate: Candidate | null; history: History[] | "failed" | null;
 };
 const SPEAKERS = ["practitioner", "patient"] as const;
 const FORM_STATUSES = ["transcript_ready", "transcript_reviewed", "extraction_processing", "extraction_failed",
@@ -75,13 +76,15 @@ function ConsultationView({ userId }: { userId: string }) {
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
 
   const fetchAll = useCallback(async (): Promise<Loaded | "missing" | "failed"> => {
-    const [consultation, tracks] = await Promise.all([
+    const [consultation, tracks, transcript] = await Promise.all([
       supabase.from("consultations").select("*").eq("id", id).maybeSingle(),
       supabase.from("audio_tracks").select("*").eq("consultation_id", id),
+      supabase.from("transcripts").select("id").eq("consultation_id", id).neq("review_status", "superseded").maybeSingle(),
     ]);
-    if (consultation.error || tracks.error) return "failed";
+    if (consultation.error || tracks.error || transcript.error) return "failed";
     if (!consultation.data) return "missing";
     // After a withdrawal, files that could not be deleted are offered for deletion again.
     const files = consultation.data.status === "consent_withdrawn"
@@ -90,6 +93,12 @@ function ConsultationView({ userId }: { userId: string }) {
     const patient = row.patient_id
       ? (await supabase.from("patients").select("id, name, phone, email").eq("id", row.patient_id).maybeSingle()).data
       : null;
+    const earlierConsultations = row.patient_id
+      ? await supabase.from("consultations").select("id, scheduled_at, language, status")
+        .eq("patient_id", row.patient_id).neq("id", row.id).lt("scheduled_at", row.scheduled_at)
+        .filter("released", "eq", false).order("scheduled_at", { ascending: false })
+      : null;
+    const history = earlierConsultations?.error ? "failed" : earlierConsultations?.data ?? null;
     // Who it is with, and whom to ask about (components/patient-check.tsx).
     const columns = { ...row, patients: patient };
     const earlier = await earlierPatients([columns]);
@@ -99,7 +108,8 @@ function ConsultationView({ userId }: { userId: string }) {
       : shown?.check === "typed" ? (await supabase.from("patients").select("id, name, phone, email")
         .eq(row.patient_claim_phone ? "phone" : "email", row.patient_claim_phone ?? row.patient_claim_email!).maybeSingle()).data
       : null;
-    return { consultation: row, tracks: tracks.data, audioLeft: files.length > 0, patient, shown, candidate };
+    return { consultation: row, tracks: tracks.data, audioLeft: files.length > 0,
+      hasTranscript: transcript.data !== null, patient, shown, candidate, history };
   }, [id, userId]);
   const load = useCallback(() => {
     fetchAll().then(setLoaded);
@@ -122,7 +132,7 @@ function ConsultationView({ userId }: { userId: string }) {
   }
   if (loaded === null) return <p className="wa-meta" role="status">Loading the consultation…</p>;
 
-  const { consultation, tracks, audioLeft, patient, shown, candidate } = loaded;
+  const { consultation, tracks, audioLeft, hasTranscript, patient, shown, candidate, history } = loaded;
   const status = consultation.status;
   const language = LANGUAGE_LABEL[consultation.language];
 
@@ -154,6 +164,11 @@ function ConsultationView({ userId }: { userId: string }) {
     setConfirming(false);
     await deleteAudio();
   });
+  const archive = () => run(async () => {
+    const outcome = await call("archive_consultation", { p_consultation_id: consultation.id });
+    if (!outcome.ok) return setProblem(explain(outcome.error_category));
+    setConfirmArchive(false);
+  });
 
   const canWithdraw = consultation.consent_recorded_at !== null && WITHDRAWABLE.includes(status);
 
@@ -173,10 +188,17 @@ function ConsultationView({ userId }: { userId: string }) {
             <p className="wa-hint">The form is approved, so consent can no longer be withdrawn here.</p>
           )}
         </div>
-        {canWithdraw && !confirming && (
-          <button type="button" className="wa-button wa-button--danger wa-button--small" onClick={() => setConfirming(true)}>
-            Withdraw consent
-          </button>
+        {!confirming && !confirmArchive && status !== "archived" && (
+          <div className="wa-actions">
+            {canWithdraw && (
+              <button type="button" className="wa-button wa-button--danger wa-button--small" onClick={() => setConfirming(true)}>
+                Withdraw consent
+              </button>
+            )}
+            <button type="button" className="wa-button wa-button--quiet wa-button--small" onClick={() => setConfirmArchive(true)}>
+              <Archive aria-hidden className="wa-icon wa-icon--sm" />Archive
+            </button>
+          </div>
         )}
       </div>
       {confirming && (
@@ -187,8 +209,18 @@ function ConsultationView({ userId }: { userId: string }) {
           Any transcription stops, and both audio tracks and the transcript are deleted. This cannot be undone.
         </Notice>
       )}
+      {confirmArchive && (
+        <Notice tone="attention" title="Archive this consultation?" actions={<>
+          <button type="button" className="wa-button wa-button--danger" disabled={busy} onClick={archive}>Archive consultation</button>
+          <button type="button" className="wa-button wa-button--secondary" disabled={busy} onClick={() => setConfirmArchive(false)}>Keep consultation</button>
+        </>}>
+          It moves to Archived instead of being permanently deleted. Any transcription or form work still running will stop.
+        </Notice>
+      )}
 
-      <Journey status={status} lines={stepLines(loaded)} />
+      {status === "archived" ? (
+        <Notice title="Archived">This consultation is kept for review, but no further work or patient messages can be started from it.</Notice>
+      ) : <Journey status={status} lines={stepLines(loaded)} />}
       {problem && <Notice tone="failed" title="That did not work">{problem}</Notice>}
 
       {status === "ready_for_audio" && tracks.length > 0 && (
@@ -251,13 +283,15 @@ function ConsultationView({ userId }: { userId: string }) {
       {FORM_STATUSES.includes(status) && <FormPanel consultationId={consultation.id} status={status} onChanged={load} />}
 
       {shown?.check && <PatientCheck consultationId={consultation.id} shown={shown} candidate={candidate} onChanged={load} />}
-      {status !== "consent_withdrawn" && <PatientPanel consultation={consultation} patient={shown} onChanged={load} />}
+      {!["consent_withdrawn", "archived"].includes(status) && <PatientPanel consultation={consultation} patient={shown} onChanged={load} />}
 
-      {status !== "consent_withdrawn" && <DocumentsPanel consultationId={consultation.id} patient={patient} person={shown} onChanged={load} />}
+      <PatientHistory history={history} />
 
-      <WhatsAppPanel consultationId={consultation.id} />
+      {!["consent_withdrawn", "archived"].includes(status) && <DocumentsPanel consultationId={consultation.id} patient={patient} person={shown} onChanged={load} />}
 
-      {HAS_TRANSCRIPT.includes(status) && (
+      {status !== "archived" && <WhatsAppPanel consultationId={consultation.id} />}
+
+      {HAS_TRANSCRIPT.includes(status) && (status !== "archived" || hasTranscript) && (
         <TranscriptView consultationId={consultation.id} language={language}
           editable={!["approved", "corrected", "archived"].includes(status)} />
       )}
@@ -283,5 +317,34 @@ function ConsultationView({ userId }: { userId: string }) {
         </aside>
       )}
     </>
+  );
+}
+
+function PatientHistory({ history }: { history: History[] | "failed" | null }) {
+  return (
+    <section className="wa-panel" aria-labelledby="history-title">
+      <div className="wa-panel__head">
+        <h2 className="wa-heading" id="history-title">Past consultations</h2>
+      </div>
+      {history === null ? (
+        <p className="wa-text">Confirm who this patient is to see their earlier consultations safely.</p>
+      ) : history === "failed" ? (
+        <Notice tone="failed" title="Past consultations could not be loaded">Check your connection and reload the page.</Notice>
+      ) : history.length === 0 ? (
+        <p className="wa-text">No earlier consultations for this patient.</p>
+      ) : (
+        <ul className="wa-done-list">
+          {history.map((consultation) => (
+            <li key={consultation.id}>
+              <Link href={`/consultation/?id=${consultation.id}`} className="wa-row__ref" style={{ color: "inherit" }}>
+                {dateTime(consultation.scheduled_at)}
+              </Link>
+              <span className="wa-meta">{LANGUAGE_LABEL[consultation.language]}</span>
+              <span style={{ marginLeft: "auto" }}><StatusChip status={consultation.status} /></span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

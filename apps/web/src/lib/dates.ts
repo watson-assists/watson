@@ -1,11 +1,12 @@
-// Dates as the owner reads them (24 Oct: "dd/mm/yyyy format everywhere ... not the American way").
-// A browser draws its own date fields in its own language's order, so Watson's are plain text:
-// day/month/year and a 24-hour clock, whatever language the browser speaks.
+// Dates are shown day/month/year. Native date inputs use their required YYYY-MM-DD value internally;
+// conversion stays on the browser's local calendar so a timezone cannot move the chosen day.
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** "05/01/2026". */
 export const asDayMonthYear = (at: Date) => `${pad(at.getDate())}/${pad(at.getMonth() + 1)}/${at.getFullYear()}`;
+/** "2026-01-05", the value required by an input[type=date]. */
+export const asDateInput = (at: Date) => `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
 /** "07:03". */
 export const asClock = (at: Date) => `${pad(at.getHours())}:${pad(at.getMinutes())}`;
 
@@ -18,5 +19,16 @@ export function fromDayAndClock(day: string, clock: string): Date | null {
   if (hours > 23 || minutes > 59) return null;
   const at = new Date(y, m - 1, d, hours, minutes);
   // new Date rolls 31 February into March; a real day comes back as typed.
+  return at.getFullYear() === y && at.getMonth() === m - 1 && at.getDate() === d ? at : null;
+}
+
+/** A native date input's value and a 24-hour time as a moment in this browser's time zone. */
+export function fromDateInputAndClock(day: string, clock: string): Date | null {
+  const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  const time = /^\s*(\d{1,2})[:.](\d{2})\s*$/.exec(clock);
+  if (!date || !time) return null;
+  const [y, m, d, hours, minutes] = [date[1], date[2], date[3], time[1], time[2]].map(Number);
+  if (hours > 23 || minutes > 59) return null;
+  const at = new Date(y, m - 1, d, hours, minutes);
   return at.getFullYear() === y && at.getMonth() === m - 1 && at.getDate() === d ? at : null;
 }

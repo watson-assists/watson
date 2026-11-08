@@ -10,7 +10,7 @@ import { z } from "@/lib/zod";
 import { AppShell } from "@/components/app-shell";
 import { FieldError, Notice } from "@/components/status";
 import { call, explain } from "@/lib/api";
-import { asClock, asDayMonthYear, fromDayAndClock } from "@/lib/dates";
+import { asClock, asDateInput, fromDateInputAndClock, fromDayAndClock } from "@/lib/dates";
 import { feeSchema, fromCents, toCents } from "@/lib/fee";
 import { PAYMENTS } from "@/lib/features";
 import { RequireSession } from "@/lib/session";
@@ -18,8 +18,7 @@ import { LANGUAGE_LABEL } from "@/lib/status";
 import { supabase } from "@/lib/supabase";
 
 const schema = z.object({
-  // Typed, not the browser's own date field, which an American browser draws month first (owner, 24 Oct).
-  day: z.string().refine((day) => fromDayAndClock(day, "12:00") !== null, "Write the date as day/month/year, like 27/10/2026."),
+  day: z.string().refine((day) => fromDateInputAndClock(day, "12:00") !== null, "Choose a date."),
   clock: z.string().refine((clock) => fromDayAndClock("1/1/2026", clock) !== null, "Write the time on the 24-hour clock, like 14:30."),
   language: z.enum(["en", "de", "sk", "auto"], "Choose the language of the consultation."),
   consent_recorded: z.boolean(),
@@ -69,14 +68,14 @@ function NewConsultation() {
 
   useEffect(() => {
     const now = new Date();
-    setValue("day", asDayMonthYear(now));
+    setValue("day", asDateInput(now));
     setValue("clock", asClock(now));
   }, [setValue]);
 
   async function create(values: Values) {
     setFailure(null);
     const outcome = await call<{ consultation_id: string }>("create_consultation", {
-      p_scheduled_at: fromDayAndClock(values.day, values.clock)!.toISOString(),
+      p_scheduled_at: fromDateInputAndClock(values.day, values.clock)!.toISOString(),
       p_language: values.language,
       p_consent_recorded: values.consent_recorded,
       p_scenario_notes: values.scenario_notes,
@@ -129,8 +128,8 @@ function NewConsultation() {
 
             <div className="wa-fields-row">
               <div className="wa-field">
-                <label className="wa-label" htmlFor="day">Date (day/month/year)</label>
-                <input id="day" className="wa-input" autoComplete="off" placeholder="27/10/2026" aria-invalid={Boolean(errors.day)}
+                <label className="wa-label" htmlFor="day">Date</label>
+                <input id="day" type="date" className="wa-input" autoComplete="off" aria-invalid={Boolean(errors.day)}
                   aria-describedby="day-error" {...register("day")} />
                 <FieldError id="day-error" message={errors.day?.message} />
               </div>
