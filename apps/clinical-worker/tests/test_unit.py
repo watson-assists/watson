@@ -222,6 +222,26 @@ def test_form_answers_keep_only_real_lines_and_say_nothing_for_topics_not_discus
     assert set(answers) == {"sleep", "diet", "work"}
 
 
+def test_live_coverage_returns_keys_only_and_discards_provisional_values() -> None:
+    from clinical_worker.form import Line, Template, coverage
+
+    class CoverageModel:
+        def complete(self, system, user, schema, stop):  # type: ignore[no-untyped-def]
+            return json.dumps(
+                {
+                    "sleep": {"lines": [0], "answer": "Wakes at three."},
+                    "diet": {"lines": [], "answer": None},
+                }
+            )
+
+    assert coverage(
+        CoverageModel(),
+        Template.model_validate(SMALL_TEMPLATE),
+        Line(0, "patient", "I wake at three."),
+        "en",
+    ) == ["sleep"]
+
+
 # Documents the patient sent (roadmap, 14 October): numbered lines in the prompt, quoted by page.
 
 SMALL_TEMPLATE = {
@@ -500,3 +520,166 @@ def test_a_field_for_the_practitioner_alone_is_never_asked_of_the_model() -> Non
     answers = {a.key: a for a in parse(raw, template, lines)}
     assert answers["sleep"].text == "Wakes at 3"
     assert answers["private_notes"].text is None and answers["private_notes"].evidence == []
+
+
+def test_typed_form_values_keep_explicit_states_choices_and_repeater_item_ids() -> None:
+    from clinical_worker.form import Line, Template, parse, schema
+
+    template = Template.model_validate(
+        {
+            "title": "Typed",
+            "title_i18n": {"en": "Typed", "sk": "Typovaný"},
+            "sections": [
+                {
+                    "key": "safety",
+                    "title": "Safety / Bezpečnosť",
+                    "title_i18n": {"en": "Safety", "sk": "Bezpečnosť"},
+                    "fields": [
+                        {
+                            "key": "pregnancy",
+                            "label": "Pregnancy / Tehotenstvo",
+                            "value_type": "single_choice",
+                            "options": [
+                                {"key": "yes", "label": "Yes / Áno"},
+                                {"key": "no", "label": "No / Nie"},
+                            ],
+                        },
+                        {
+                            "key": "medications",
+                            "label": "Medication / Lieky",
+                            "value_type": "repeater",
+                            "item_fields": [
+                                {"key": "name", "label": "Name / Názov", "value_type": "text"},
+                                {"key": "dose", "label": "Dose / Dávka", "value_type": "text"},
+                            ],
+                        },
+                        {
+                            "key": "safety_confirmed",
+                            "label": "Safety confirmed / Bezpečnosť potvrdená",
+                            "mode": "manual",
+                            "value_type": "attestation",
+                        },
+                    ],
+                }
+            ],
+            "approval_gates": [
+                {"key": "safety", "type": "attestation", "field_key": "safety_confirmed"}
+            ],
+        }
+    )
+    output_schema = schema(template)
+    assert output_schema["properties"]["pregnancy"]["properties"]["value"]["anyOf"][0]["enum"] == [
+        "yes",
+        "no",
+    ]
+    assert "safety_confirmed" not in output_schema["properties"]
+
+    raw = json.dumps(
+        {
+            "pregnancy": {"lines": [0], "state": "explicit_none", "value": None},
+            "medications": {
+                "lines": [1],
+                "state": "known",
+                "value": [{"name": "Medicine A", "dose": "5 mg"}],
+            },
+        }
+    )
+    answers = {
+        answer.key: answer
+        for answer in parse(
+            raw,
+            template,
+            [Line(0, "patient", "I am not pregnant."), Line(1, "patient", "Medicine A, 5 mg.")],
+        )
+    }
+    assert answers["pregnancy"].state == "explicit_none"
+    assert answers["pregnancy"].value is None
+    assert answers["pregnancy"].evidence == [0]
+    [medication] = answers["medications"].value
+    assert medication["values"] == {"name": "Medicine A", "dose": "5 mg"}
+    assert len(medication["item_id"]) == 36
+    assert answers["safety_confirmed"].state == "unanswered"
+
+
+def test_typed_form_rejects_unknown_choice_keys_and_drops_their_evidence() -> None:
+    from clinical_worker.form import Line, Template, parse
+
+    template = Template.model_validate(
+        {
+            "title": "Typed",
+            "sections": [
+                {
+                    "title": "Assessment",
+                    "fields": [
+                        {
+                            "key": "agni",
+                            "label": "Agni",
+                            "value_type": "single_choice",
+                            "options": [
+                                {"key": "sama", "label": "Sama"},
+                                {"key": "manda", "label": "Manda"},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    [answer] = parse(
+        '{"agni":{"lines":[0],"state":"known","value":"invented"}}',
+        template,
+        [Line(0, "patient", "Something")],
+    )
+    assert answer.state == "unanswered"
+    assert answer.value is None
+    assert answer.evidence == []
+
+
+def test_typed_form_rejects_impossible_calendar_dates() -> None:
+    from clinical_worker.form import Line, Template, parse, schema
+
+    template = Template.model_validate(
+        {
+            "title": "Typed",
+            "sections": [
+                {
+                    "title": "Patient",
+                    "fields": [
+                        {"key": "date_of_birth", "label": "Date of birth", "value_type": "date"}
+                    ],
+                }
+            ],
+        }
+    )
+    assert (
+        schema(template)["properties"]["date_of_birth"]["properties"]["value"]["anyOf"][0]["format"]
+        == "date"
+    )
+    [answer] = parse(
+        '{"date_of_birth":{"lines":[0],"state":"known","value":"2026-99-99"}}',
+        template,
+        [Line(0, "patient", "An impossible date")],
+    )
+    assert answer.state == "unanswered"
+    assert answer.value is None
+    assert answer.evidence == []
+
+
+def test_published_massage_template_matches_the_worker_schema() -> None:
+    from clinical_worker.form import Template
+
+    migration = (
+        SCHEMA_DIR.parents[1]
+        / "supabase/migrations/20261108103552_typed_bilingual_form_templates.sql"
+    ).read_text()
+    definition = migration.split("select $form$", 1)[1].split("$form$::jsonb", 1)[0]
+    template = Template.model_validate_json(definition)
+
+    assert len(template.sections) == 10
+    assert len(template.fields) > 70
+    assert {field.key for field in template.fields if field.value_type == "repeater"} == {
+        "medications",
+        "symptom_entries",
+    }
+    assert len(template.approval_gates) == 6
+    assert template.approval_gates[-1].signer_role == "practitioner"

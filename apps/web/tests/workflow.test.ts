@@ -69,7 +69,8 @@ describe("audio", () => {
     expect(await rpc(cara.client, "remove_audio_track", { p_consultation_id: id, p_speaker: "patient" })).toEqual({ ok: true });
     expect(await statusOf(id)).toBe("ready_for_audio");
     expect((await eventsOf(id)).map((event) => event.event_type)).toEqual([
-      "consultation.created", "consent.recorded", "audio.imported", "audio.imported", "audio.removed",
+      "form_template.pinned", "consultation.created", "consent.recorded",
+      "audio.imported", "audio.imported", "audio.removed",
     ]);
   });
 

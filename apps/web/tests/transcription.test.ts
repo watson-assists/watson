@@ -109,7 +109,7 @@ describe("a job from start to transcript", () => {
     expect(await heartbeat(engine, job)).toEqual({ ok: true, continue: true });
 
     expect((await complete(engine, job, transcript(id))).ok).toBe(true);
-    expect(await statusOf(id)).toBe("transcript_ready");
+    expect(await statusOf(id)).toBe("extraction_processing");
     const { data: current } = await cara.client.from("transcripts").select("id").eq("consultation_id", id).single();
     const { data: segments } = await cara.client.from("transcript_segments")
       .select("position, speaker, machine_text").eq("transcript_id", current?.id ?? "").order("position");

@@ -1,10 +1,4 @@
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[]
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {
   graphql_public: {
@@ -16,12 +10,7 @@ export type Database = {
     }
     Functions: {
       graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
+        Args: { extensions?: Json; operationName?: string; query?: string; variables?: Json }
         Returns: Json
       }
     }
@@ -49,6 +38,7 @@ export type Database = {
           validation: Database["public"]["Enums"]["track_validation"]
           validation_error: string | null
         }
+        ComputedFields: never
         Insert: {
           consultation_id: string
           created_at?: string
@@ -85,6 +75,13 @@ export type Database = {
             referencedRelation: "consultations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "audio_tracks_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "form_template_pin_backfill_review"
+            referencedColumns: ["consultation_id"]
+          },
         ]
       }
       audit_events: {
@@ -95,7 +92,7 @@ export type Database = {
           event_hash: string
           event_id: string
           event_type: string
-          metadata_without_clinical_content: Json
+          metadata_without_clinical_content: NonNullable<Json>
           previous_event_hash: string | null
           resource_id: string | null
           resource_type: string
@@ -103,6 +100,7 @@ export type Database = {
           seq: number
           timestamp_utc: string
         }
+        ComputedFields: never
         Insert: {
           actor_id: string
           actor_role: string
@@ -110,7 +108,7 @@ export type Database = {
           event_hash: string
           event_id: string
           event_type: string
-          metadata_without_clinical_content?: Json
+          metadata_without_clinical_content?: NonNullable<Json>
           previous_event_hash?: string | null
           resource_id?: string | null
           resource_type: string
@@ -125,7 +123,7 @@ export type Database = {
           event_hash?: string
           event_id?: string
           event_type?: string
-          metadata_without_clinical_content?: Json
+          metadata_without_clinical_content?: NonNullable<Json>
           previous_event_hash?: string | null
           resource_id?: string | null
           resource_type?: string
@@ -141,6 +139,13 @@ export type Database = {
             referencedRelation: "consultations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "audit_events_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "form_template_pin_backfill_review"
+            referencedColumns: ["consultation_id"]
+          },
         ]
       }
       busy_times: {
@@ -149,6 +154,7 @@ export type Database = {
           practitioner_id: string
           starts_at: string
         }
+        ComputedFields: never
         Insert: {
           ends_at: string
           practitioner_id: string
@@ -188,8 +194,8 @@ export type Database = {
           patient_claim_phone: string | null
           patient_claim_updated_at: string | null
           patient_id: string | null
-          previous_consultation_id: string | null
           practitioner_id: string
+          previous_consultation_id: string | null
           recorded_together: boolean
           remind_whatsapp: boolean
           reminder_sent_at: string | null
@@ -201,7 +207,9 @@ export type Database = {
           synthetic_patient_ref: string
           updated_at: string
           whatsapp_code: string
+          released: boolean | null
         }
+        ComputedFields: "released"
         Insert: {
           booked_at?: string | null
           consent_recorded_at?: string | null
@@ -228,8 +236,8 @@ export type Database = {
           patient_claim_phone?: string | null
           patient_claim_updated_at?: string | null
           patient_id?: string | null
-          previous_consultation_id?: string | null
           practitioner_id: string
+          previous_consultation_id?: string | null
           recorded_together?: boolean
           remind_whatsapp?: boolean
           reminder_sent_at?: string | null
@@ -268,8 +276,8 @@ export type Database = {
           patient_claim_phone?: string | null
           patient_claim_updated_at?: string | null
           patient_id?: string | null
-          previous_consultation_id?: string | null
           practitioner_id?: string
+          previous_consultation_id?: string | null
           recorded_together?: boolean
           remind_whatsapp?: boolean
           reminder_sent_at?: string | null
@@ -304,6 +312,13 @@ export type Database = {
             referencedRelation: "consultations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "consultations_previous_consultation_id_fkey"
+            columns: ["previous_consultation_id"]
+            isOneToOne: false
+            referencedRelation: "form_template_pin_backfill_review"
+            referencedColumns: ["consultation_id"]
+          },
         ]
       }
       engine_runs: {
@@ -313,6 +328,7 @@ export type Database = {
           id: string
           started_at: string
         }
+        ComputedFields: never
         Insert: {
           engine_user_id: string
           finished_at?: string | null
@@ -337,18 +353,28 @@ export type Database = {
       }
       engines: {
         Row: {
+          can_caption: boolean
+          can_final_form: boolean
+          can_provisional_form: boolean
           label: string
           last_seen_at: string | null
           on_demand: boolean
           user_id: string
         }
+        ComputedFields: never
         Insert: {
+          can_caption?: boolean
+          can_final_form?: boolean
+          can_provisional_form?: boolean
           label: string
           last_seen_at?: string | null
           on_demand?: boolean
           user_id: string
         }
         Update: {
+          can_caption?: boolean
+          can_final_form?: boolean
+          can_provisional_form?: boolean
           label?: string
           last_seen_at?: string | null
           on_demand?: boolean
@@ -358,38 +384,87 @@ export type Database = {
       }
       form_answers: {
         Row: {
-          document_quotes: Json
+          answer_state: string
+          document_quotes: NonNullable<Json>
           evidence: number[]
           field_key: string
           form_id: string
+          machine_state: string
           machine_text: string | null
+          machine_value: Json | null
           position: number
           practitioner_text: string | null
+          practitioner_value: Json | null
           review: string
+          value_type: string
         }
+        ComputedFields: never
         Insert: {
-          document_quotes?: Json
+          answer_state?: string
+          document_quotes?: NonNullable<Json>
           evidence?: number[]
           field_key: string
           form_id: string
+          machine_state?: string
           machine_text?: string | null
+          machine_value?: Json | null
           position: number
           practitioner_text?: string | null
+          practitioner_value?: Json | null
           review?: string
+          value_type?: string
         }
         Update: {
-          document_quotes?: Json
+          answer_state?: string
+          document_quotes?: NonNullable<Json>
           evidence?: number[]
           field_key?: string
           form_id?: string
+          machine_state?: string
           machine_text?: string | null
+          machine_value?: Json | null
           position?: number
           practitioner_text?: string | null
+          practitioner_value?: Json | null
           review?: string
+          value_type?: string
         }
         Relationships: [
           {
             foreignKeyName: "form_answers_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      form_attestations: {
+        Row: {
+          attested_at: string
+          attested_by: string
+          decision: string
+          field_key: string
+          form_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          attested_at?: string
+          attested_by: string
+          decision: string
+          field_key: string
+          form_id: string
+        }
+        Update: {
+          attested_at?: string
+          attested_by?: string
+          decision?: string
+          field_key?: string
+          form_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_attestations_form_id_fkey"
             columns: ["form_id"]
             isOneToOne: false
             referencedRelation: "forms"
@@ -405,13 +480,17 @@ export type Database = {
           engine_user_id: string | null
           error_category: string | null
           finished_at: string | null
+          form_template_version_id: string
           heartbeat_at: string | null
           id: string
-          metrics: Json
+          metrics: NonNullable<Json>
+          parent_form_id: string | null
           queued_at: string
+          revision_kind: string
           status: Database["public"]["Enums"]["job_status"]
           transcript_id: string
         }
+        ComputedFields: never
         Insert: {
           attempt?: number
           claimed_at?: string | null
@@ -419,10 +498,13 @@ export type Database = {
           engine_user_id?: string | null
           error_category?: string | null
           finished_at?: string | null
+          form_template_version_id: string
           heartbeat_at?: string | null
           id?: string
-          metrics?: Json
+          metrics?: NonNullable<Json>
+          parent_form_id?: string | null
           queued_at?: string
+          revision_kind?: string
           status?: Database["public"]["Enums"]["job_status"]
           transcript_id: string
         }
@@ -433,10 +515,13 @@ export type Database = {
           engine_user_id?: string | null
           error_category?: string | null
           finished_at?: string | null
+          form_template_version_id?: string
           heartbeat_at?: string | null
           id?: string
-          metrics?: Json
+          metrics?: NonNullable<Json>
+          parent_form_id?: string | null
           queued_at?: string
+          revision_kind?: string
           status?: Database["public"]["Enums"]["job_status"]
           transcript_id?: string
         }
@@ -449,10 +534,118 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "form_jobs_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "form_template_pin_backfill_review"
+            referencedColumns: ["consultation_id"]
+          },
+          {
+            foreignKeyName: "form_jobs_form_template_version_id_fkey"
+            columns: ["form_template_version_id"]
+            isOneToOne: false
+            referencedRelation: "form_template_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_jobs_parent_form_id_fkey"
+            columns: ["parent_form_id"]
+            isOneToOne: false
+            referencedRelation: "forms"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "form_jobs_transcript_id_fkey"
             columns: ["transcript_id"]
             isOneToOne: false
             referencedRelation: "transcripts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      form_reconciliation_conflicts: {
+        Row: {
+          created_at: string
+          field_key: string
+          form_id: string
+          id: string
+          kind: string
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+        }
+        ComputedFields: never
+        Insert: {
+          created_at?: string
+          field_key: string
+          form_id: string
+          id?: string
+          kind: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          field_key?: string
+          form_id?: string
+          id?: string
+          kind?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_reconciliation_conflicts_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      form_signatures: {
+        Row: {
+          created_at: string
+          field_key: string
+          form_id: string
+          id: string
+          method: string
+          recorded_by: string
+          signed_at: string
+          signed_name: string
+          signer_role: string
+        }
+        ComputedFields: never
+        Insert: {
+          created_at?: string
+          field_key: string
+          form_id: string
+          id?: string
+          method: string
+          recorded_by: string
+          signed_at: string
+          signed_name: string
+          signer_role: string
+        }
+        Update: {
+          created_at?: string
+          field_key?: string
+          form_id?: string
+          id?: string
+          method?: string
+          recorded_by?: string
+          signed_at?: string
+          signed_name?: string
+          signer_role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_signatures_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "forms"
             referencedColumns: ["id"]
           },
         ]
@@ -464,6 +657,7 @@ export type Database = {
           updated_at: string
           updated_by: string
         }
+        ComputedFields: never
         Insert: {
           form_template_version_id: string
           practitioner_id: string
@@ -490,7 +684,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
-          definition: Json
+          definition: NonNullable<Json>
           definition_hash: string | null
           id: string
           is_built_in: boolean
@@ -500,10 +694,11 @@ export type Database = {
           template_key: string
           version_number: number
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           created_by?: string | null
-          definition: Json
+          definition: NonNullable<Json>
           definition_hash?: never
           id?: string
           is_built_in?: boolean
@@ -516,7 +711,7 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
-          definition?: Json
+          definition?: NonNullable<Json>
           definition_hash?: never
           id?: string
           is_built_in?: boolean
@@ -530,17 +725,18 @@ export type Database = {
       }
       form_templates: {
         Row: {
-          definition: Json
+          definition: NonNullable<Json>
           practitioner_id: string
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
-          definition: Json
+          definition: NonNullable<Json>
           practitioner_id: string
           updated_at?: string
         }
         Update: {
-          definition?: Json
+          definition?: NonNullable<Json>
           practitioner_id?: string
           updated_at?: string
         }
@@ -555,11 +751,15 @@ export type Database = {
           form_template_version_id: string | null
           id: string
           job_id: string
+          parent_form_id: string | null
+          revision_kind: string
+          revision_number: number
           status: string
-          template: Json
+          template: NonNullable<Json>
           template_hash: string
           transcript_id: string
         }
+        ComputedFields: never
         Insert: {
           approved_at?: string | null
           approved_by?: string | null
@@ -568,8 +768,11 @@ export type Database = {
           form_template_version_id?: string | null
           id?: string
           job_id: string
+          parent_form_id?: string | null
+          revision_kind?: string
+          revision_number: number
           status?: string
-          template: Json
+          template: NonNullable<Json>
           template_hash?: never
           transcript_id: string
         }
@@ -581,8 +784,11 @@ export type Database = {
           form_template_version_id?: string | null
           id?: string
           job_id?: string
+          parent_form_id?: string | null
+          revision_kind?: string
+          revision_number?: number
           status?: string
-          template?: Json
+          template?: NonNullable<Json>
           template_hash?: never
           transcript_id?: string
         }
@@ -595,6 +801,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "forms_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "form_template_pin_backfill_review"
+            referencedColumns: ["consultation_id"]
+          },
+          {
+            foreignKeyName: "forms_form_template_version_id_fkey"
+            columns: ["form_template_version_id"]
+            isOneToOne: false
+            referencedRelation: "form_template_versions"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "forms_job_id_fkey"
             columns: ["job_id"]
             isOneToOne: true
@@ -602,10 +822,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "forms_form_template_version_id_fkey"
-            columns: ["form_template_version_id"]
+            foreignKeyName: "forms_parent_form_id_fkey"
+            columns: ["parent_form_id"]
             isOneToOne: false
-            referencedRelation: "form_template_versions"
+            referencedRelation: "forms"
             referencedColumns: ["id"]
           },
           {
@@ -627,6 +847,7 @@ export type Database = {
           problem: string | null
           refresh_token: string
         }
+        ComputedFields: never
         Insert: {
           calendar_id: string
           checked_at?: string | null
@@ -663,6 +884,7 @@ export type Database = {
           storage_path: string
           text: string | null
         }
+        ComputedFields: never
         Insert: {
           claimed_at?: string | null
           consultation_id: string
@@ -702,6 +924,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "live_pieces_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "form_template_pin_backfill_review"
+            referencedColumns: ["consultation_id"]
+          },
+          {
             foreignKeyName: "live_pieces_engine_user_id_fkey"
             columns: ["engine_user_id"]
             isOneToOne: false
@@ -734,6 +963,7 @@ export type Database = {
           storage_path: string
           uploaded_at: string | null
         }
+        ComputedFields: never
         Insert: {
           claimed_at?: string | null
           cleanup_completed_at?: string | null
@@ -789,6 +1019,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "patient_documents_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "form_template_pin_backfill_review"
+            referencedColumns: ["consultation_id"]
+          },
+          {
             foreignKeyName: "patient_documents_patient_id_fkey"
             columns: ["patient_id"]
             isOneToOne: false
@@ -807,6 +1044,7 @@ export type Database = {
           practitioner_id: string
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           email?: string | null
@@ -833,7 +1071,7 @@ export type Database = {
           display_name: string
           fee_cents: number | null
           gap_minutes: number
-          hours: Json
+          hours: NonNullable<Json>
           languages: Database["public"]["Enums"]["consultation_language"][]
           length_minutes: number
           offer: string
@@ -842,12 +1080,13 @@ export type Database = {
           time_zone: string
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           about?: string
           display_name: string
           fee_cents?: number | null
           gap_minutes?: number
-          hours?: Json
+          hours?: NonNullable<Json>
           languages?: Database["public"]["Enums"]["consultation_language"][]
           length_minutes?: number
           offer?: string
@@ -861,7 +1100,7 @@ export type Database = {
           display_name?: string
           fee_cents?: number | null
           gap_minutes?: number
-          hours?: Json
+          hours?: NonNullable<Json>
           languages?: Database["public"]["Enums"]["consultation_language"][]
           length_minutes?: number
           offer?: string
@@ -871,6 +1110,49 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      provisional_form_coverage: {
+        Row: {
+          consultation_id: string
+          expires_at: string
+          field_key: string
+          first_seen_at: string
+          last_seen_at: string
+          source_piece_ids: string[]
+        }
+        ComputedFields: never
+        Insert: {
+          consultation_id: string
+          expires_at?: string
+          field_key: string
+          first_seen_at?: string
+          last_seen_at?: string
+          source_piece_ids?: string[]
+        }
+        Update: {
+          consultation_id?: string
+          expires_at?: string
+          field_key?: string
+          first_seen_at?: string
+          last_seen_at?: string
+          source_piece_ids?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provisional_form_coverage_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "consultations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provisional_form_coverage_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "form_template_pin_backfill_review"
+            referencedColumns: ["consultation_id"]
+          },
+        ]
       }
       spellings: {
         Row: {
@@ -882,6 +1164,7 @@ export type Database = {
           practitioner_id: string
           written: string
         }
+        ComputedFields: never
         Insert: {
           consultation_id: string
           created_at?: string
@@ -909,6 +1192,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "spellings_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "form_template_pin_backfill_review"
+            referencedColumns: ["consultation_id"]
+          },
+          {
             foreignKeyName: "spellings_patient_id_fkey"
             columns: ["patient_id"]
             isOneToOne: false
@@ -932,6 +1222,7 @@ export type Database = {
           start_seconds: number
           transcript_id: string
         }
+        ComputedFields: never
         Insert: {
           confidence?: number | null
           end_seconds: number
@@ -981,12 +1272,13 @@ export type Database = {
           finished_at: string | null
           heartbeat_at: string | null
           id: string
-          metrics: Json
+          metrics: NonNullable<Json>
           queued_at: string
           requested_by: string
           stage: Database["public"]["Enums"]["job_stage"] | null
           status: Database["public"]["Enums"]["job_status"]
         }
+        ComputedFields: never
         Insert: {
           attempt?: number
           claimed_at?: string | null
@@ -997,7 +1289,7 @@ export type Database = {
           finished_at?: string | null
           heartbeat_at?: string | null
           id?: string
-          metrics?: Json
+          metrics?: NonNullable<Json>
           queued_at?: string
           requested_by: string
           stage?: Database["public"]["Enums"]["job_stage"] | null
@@ -1013,7 +1305,7 @@ export type Database = {
           finished_at?: string | null
           heartbeat_at?: string | null
           id?: string
-          metrics?: Json
+          metrics?: NonNullable<Json>
           queued_at?: string
           requested_by?: string
           stage?: Database["public"]["Enums"]["job_stage"] | null
@@ -1026,6 +1318,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "consultations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transcription_jobs_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "form_template_pin_backfill_review"
+            referencedColumns: ["consultation_id"]
           },
         ]
       }
@@ -1041,8 +1340,9 @@ export type Database = {
           reviewed_at: string | null
           reviewed_by: string | null
           schema_version: string
-          tracks: Json
+          tracks: NonNullable<Json>
         }
+        ComputedFields: never
         Insert: {
           consultation_id: string
           created_at?: string
@@ -1054,7 +1354,7 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           schema_version: string
-          tracks: Json
+          tracks: NonNullable<Json>
         }
         Update: {
           consultation_id?: string
@@ -1067,7 +1367,7 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           schema_version?: string
-          tracks?: Json
+          tracks?: NonNullable<Json>
         }
         Relationships: [
           {
@@ -1076,6 +1376,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "consultations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transcripts_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "form_template_pin_backfill_review"
+            referencedColumns: ["consultation_id"]
           },
           {
             foreignKeyName: "transcripts_job_id_fkey"
@@ -1094,6 +1401,7 @@ export type Database = {
           phone: string
           profile_name: string | null
         }
+        ComputedFields: never
         Insert: {
           consultation_id: string
           last_inbound_at?: string | null
@@ -1116,6 +1424,13 @@ export type Database = {
             referencedRelation: "consultations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "whatsapp_contacts_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "form_template_pin_backfill_review"
+            referencedColumns: ["consultation_id"]
+          },
         ]
       }
       whatsapp_messages: {
@@ -1131,6 +1446,7 @@ export type Database = {
           status: string
           wa_message_id: string | null
         }
+        ComputedFields: never
         Insert: {
           body?: string | null
           consultation_id?: string | null
@@ -1163,11 +1479,27 @@ export type Database = {
             referencedRelation: "consultations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "whatsapp_messages_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "form_template_pin_backfill_review"
+            referencedColumns: ["consultation_id"]
+          },
         ]
       }
     }
     Views: {
-      [_ in never]: never
+      form_template_pin_backfill_review: {
+        Row: {
+          consultation_id: string
+          review_reason: string | null
+          scheduled_at: string
+          status: Database["public"]["Enums"]["consultation_status"]
+        }
+        ComputedFields: never
+        Relationships: []
+      }
     }
     Functions: {
       add_document: {
@@ -1189,10 +1521,7 @@ export type Database = {
         Returns: Json
       }
       approve_form: { Args: { p_form_id: string }; Returns: Json }
-      archive_consultation: {
-        Args: { p_consultation_id: string }
-        Returns: Json
-      }
+      archive_consultation: { Args: { p_consultation_id: string }; Returns: Json }
       book_time: {
         Args: {
           p_contact: string
@@ -1204,33 +1533,18 @@ export type Database = {
         }
         Returns: Json
       }
-      booking_times: {
-        Args: { p_from: string; p_slug: string; p_to: string }
-        Returns: Json
-      }
-      bootstrap_patient_role: { Args: never; Returns: Json }
+      booking_times: { Args: { p_from: string; p_slug: string; p_to: string }; Returns: Json }
+      bootstrap_patient_role: { Args: Record<PropertyKey, never>; Returns: Json }
       calendar_week: { Args: { p_from: string; p_to: string }; Returns: Json }
       cancel_patient_otp_challenge: {
         Args: { p_code_hash: string; p_contact_hash: string }
         Returns: Json
       }
-      cancel_transcription: {
-        Args: { p_consultation_id: string }
-        Returns: Json
-      }
-      complete_document_cleanup: {
-        Args: { p_document_id: string }
-        Returns: boolean
-      }
-      confirm_audio_deleted: {
-        Args: { p_consultation_id: string }
-        Returns: Json
-      }
+      cancel_transcription: { Args: { p_consultation_id: string }; Returns: Json }
+      complete_document_cleanup: { Args: { p_document_id: string }; Returns: boolean }
+      confirm_audio_deleted: { Args: { p_consultation_id: string }; Returns: Json }
       confirm_document: { Args: { p_document_id: string }; Returns: Json }
-      confirm_new_patient: {
-        Args: { p_consultation_id: string }
-        Returns: Json
-      }
+      confirm_new_patient: { Args: { p_consultation_id: string }; Returns: Json }
       correct_live_line: {
         Args: { p_piece_id: string; p_spellings?: Json; p_text: string }
         Returns: Json
@@ -1252,47 +1566,44 @@ export type Database = {
         }
         Returns: Json
       }
-      create_form_template_version: {
-        Args: { p_definition: Json }
+      create_consultation_with_template: {
+        Args: {
+          p_consent_recorded: boolean
+          p_fee_cents?: number
+          p_form_template_version_id: string
+          p_language: Database["public"]["Enums"]["consultation_language"]
+          p_patient_contact?: string
+          p_patient_name?: string
+          p_scenario_notes?: string
+          p_scheduled_at: string
+          p_synthetic_patient_ref?: string
+        }
         Returns: Json
       }
-      current_user_roles: { Args: never; Returns: string[] }
+      create_form_template_version: { Args: { p_definition: Json }; Returns: Json }
+      current_user_roles: { Args: Record<PropertyKey, never>; Returns: string[] }
       declare_recorded_together: {
         Args: { p_consultation_id: string; p_recorded_together: boolean }
         Returns: Json
       }
-      engine_claim_document: { Args: never; Returns: Json }
-      engine_claim_form_job: { Args: never; Returns: Json }
-      engine_claim_job: { Args: never; Returns: Json }
-      engine_claim_live_piece: { Args: never; Returns: Json }
+      engine_claim_document: { Args: Record<PropertyKey, never>; Returns: Json }
+      engine_claim_form_job: { Args: Record<PropertyKey, never>; Returns: Json }
+      engine_claim_job: { Args: Record<PropertyKey, never>; Returns: Json }
+      engine_claim_live_piece: { Args: Record<PropertyKey, never>; Returns: Json }
       engine_complete_document: {
         Args: { p_attempt: number; p_document_id: string; p_pages: string[] }
         Returns: Json
       }
       engine_complete_form_job: {
-        Args: {
-          p_answers: Json
-          p_attempt: number
-          p_job_id: string
-          p_metrics?: Json
-        }
+        Args: { p_answers: Json; p_attempt: number; p_job_id: string; p_metrics?: Json }
         Returns: Json
       }
       engine_complete_job: {
-        Args: {
-          p_attempt: number
-          p_job_id: string
-          p_metrics?: Json
-          p_transcript: Json
-        }
+        Args: { p_attempt: number; p_job_id: string; p_metrics?: Json; p_transcript: Json }
         Returns: Json
       }
       engine_fail_document: {
-        Args: {
-          p_attempt: number
-          p_document_id: string
-          p_error_category: string
-        }
+        Args: { p_attempt: number; p_document_id: string; p_error_category: string }
         Returns: Json
       }
       engine_fail_form_job: {
@@ -1309,10 +1620,7 @@ export type Database = {
         }
         Returns: Json
       }
-      engine_form_heartbeat: {
-        Args: { p_attempt: number; p_job_id: string }
-        Returns: Json
-      }
+      engine_form_heartbeat: { Args: { p_attempt: number; p_job_id: string }; Returns: Json }
       engine_heartbeat: {
         Args: {
           p_attempt: number
@@ -1323,30 +1631,22 @@ export type Database = {
         Returns: Json
       }
       engine_hints: { Args: { p_consultation_id: string }; Returns: Json }
-      engine_live_piece_done: {
-        Args: { p_id: string; p_text: string }
-        Returns: Json
-      }
+      engine_live_piece_done: { Args: { p_id: string; p_text: string }; Returns: Json }
       engine_live_piece_failed: { Args: { p_id: string }; Returns: Json }
+      engine_record_provisional_coverage: {
+        Args: { p_field_keys: string[]; p_piece_id: string }
+        Returns: Json
+      }
       engine_run_finished: { Args: { p_run_id: string }; Returns: Json }
-      engine_run_started: { Args: never; Returns: Json }
-      engine_status: { Args: never; Returns: Json }
+      engine_run_started: { Args: Record<PropertyKey, never>; Returns: Json }
+      engine_status: { Args: Record<PropertyKey, never>; Returns: Json }
       fill_form_again: { Args: { p_consultation_id: string }; Returns: Json }
-      find_practitioners: { Args: never; Returns: Json }
+      find_practitioners: { Args: Record<PropertyKey, never>; Returns: Json }
       google_disconnect: { Args: { p_practitioner: string }; Returns: Json }
-      google_event_written: {
-        Args: { p_consultation: string; p_event_id: string }
-        Returns: Json
-      }
+      google_event_written: { Args: { p_consultation: string; p_event_id: string }; Returns: Json }
       google_events_due: { Args: { p_practitioner: string }; Returns: Json }
-      google_problem: {
-        Args: { p_practitioner: string; p_problem: string }
-        Returns: Json
-      }
-      google_replace_busy: {
-        Args: { p_busy: Json; p_practitioner: string }
-        Returns: Json
-      }
+      google_problem: { Args: { p_practitioner: string; p_problem: string }; Returns: Json }
+      google_replace_busy: { Args: { p_busy: Json; p_practitioner: string }; Returns: Json }
       google_save_connection: {
         Args: {
           p_calendar_id: string
@@ -1362,63 +1662,43 @@ export type Database = {
         Returns: Json
       }
       link_previous_consultation: {
-        Args: {
-          p_consultation_id: string
-          p_previous_consultation_id: string | null
-        }
+        Args: { p_consultation_id: string; p_previous_consultation_id: string }
         Returns: Json
       }
-      make_consultation_free: {
-        Args: { p_consultation_id: string }
-        Returns: Json
-      }
+      make_consultation_free: { Args: { p_consultation_id: string }; Returns: Json }
       open_short_link: { Args: { p_code: string }; Returns: Json }
       patient_add_document: {
-        Args: {
-          p_file_name: string
-          p_media_type: string
-          p_size_bytes: number
-          p_token: string
-        }
+        Args: { p_file_name: string; p_media_type: string; p_size_bytes: number; p_token: string }
         Returns: Json
       }
-      patient_confirm_document: {
-        Args: { p_document_id: string; p_token: string }
-        Returns: Json
-      }
+      patient_confirm_document: { Args: { p_document_id: string; p_token: string }; Returns: Json }
       patient_identify: {
         Args: { p_contact: string; p_name: string; p_token: string }
         Returns: Json
       }
       patient_link_consultation: { Args: { p_token: string }; Returns: Json }
-      patient_remove_document: {
-        Args: { p_document_id: string; p_token: string }
-        Returns: Json
-      }
+      patient_remove_document: { Args: { p_document_id: string; p_token: string }; Returns: Json }
       patient_review_association: {
-        Args: {
-          p_consultation_id: string
-          p_decision: string
-          p_patient_id: string
-        }
+        Args: { p_consultation_id: string; p_decision: string; p_patient_id: string }
         Returns: Json
       }
       pin_consultation_form_template: {
         Args: { p_consultation_id: string; p_version_id?: string }
         Returns: Json
       }
-      provision_patient_role_after_otp: {
-        Args: { p_user_id: string }
+      provision_patient_role_after_otp: { Args: { p_user_id: string }; Returns: Json }
+      queue_form_revision: {
+        Args: {
+          p_consultation_id: string
+          p_form_template_version_id: string
+          p_revision_kind: string
+        }
         Returns: Json
       }
       read_document_again: { Args: { p_document_id: string }; Returns: Json }
       record_consent: { Args: { p_consultation_id: string }; Returns: Json }
       record_payment: {
-        Args: {
-          p_amount_cents: number
-          p_consultation_id: string
-          p_session_id: string
-        }
+        Args: { p_amount_cents: number; p_consultation_id: string; p_session_id: string }
         Returns: Json
       }
       register_audio_track: {
@@ -1432,10 +1712,7 @@ export type Database = {
         }
         Returns: Json
       }
-      register_engine: {
-        Args: { p_label: string; p_user_id: string }
-        Returns: undefined
-      }
+      register_engine: { Args: { p_label: string; p_user_id: string }; Returns: undefined }
       register_patient_otp_session: {
         Args: {
           p_session_id: string
@@ -1446,27 +1723,34 @@ export type Database = {
         Returns: Json
       }
       register_practitioner: { Args: { p_user_id: string }; Returns: undefined }
+      reject_form_revision: { Args: { p_form_id: string }; Returns: Json }
       released: {
         Args: {
-          p_consultation: Database["public"]["Tables"]["consultations"]["Row"]
+          p_consultation: Omit<
+            Database["public"]["Tables"]["consultations"]["Row"],
+            Database["public"]["Tables"]["consultations"]["ComputedFields"]
+          >
         }
         Returns: boolean
       }
       remove_audio_track: {
-        Args: {
-          p_consultation_id: string
-          p_speaker: Database["public"]["Enums"]["speaker"]
-        }
+        Args: { p_consultation_id: string; p_speaker: Database["public"]["Enums"]["speaker"] }
         Returns: Json
       }
       remove_document: { Args: { p_document_id: string }; Returns: Json }
       renew_hold: { Args: { p_token: string }; Returns: Json }
+      resolve_form_reconciliation: { Args: { p_conflict_id: string }; Returns: Json }
       review_form_answer: {
+        Args: { p_decision: string; p_field_key: string; p_form_id: string; p_text?: string }
+        Returns: Json
+      }
+      review_typed_form_answer: {
         Args: {
           p_decision: string
           p_field_key: string
           p_form_id: string
-          p_text?: string
+          p_state?: string
+          p_value?: Json
         }
         Returns: Json
       }
@@ -1483,8 +1767,20 @@ export type Database = {
         }
         Returns: Json
       }
-      set_default_form_template_version: {
-        Args: { p_version_id: string }
+      set_default_form_template_version: { Args: { p_version_id: string }; Returns: Json }
+      set_form_attestation: {
+        Args: { p_decision: string; p_field_key: string; p_form_id: string }
+        Returns: Json
+      }
+      set_form_signature: {
+        Args: {
+          p_field_key: string
+          p_form_id: string
+          p_method: string
+          p_signed_at?: string
+          p_signed_name: string
+          p_signer_role: string
+        }
         Returns: Json
       }
       set_form_template: { Args: { p_definition: Json }; Returns: Json }
@@ -1493,39 +1789,25 @@ export type Database = {
         Returns: Json
       }
       start_form: { Args: { p_consultation_id: string }; Returns: Json }
-      start_transcription: {
-        Args: { p_consultation_id: string }
-        Returns: Json
-      }
-      use_watson_form: { Args: never; Returns: Json }
-      verify_audit_chain: {
-        Args: { p_consultation_id: string }
-        Returns: boolean
-      }
+      start_transcription: { Args: { p_consultation_id: string }; Returns: Json }
+      use_watson_form: { Args: Record<PropertyKey, never>; Returns: Json }
+      verify_audit_chain: { Args: { p_consultation_id: string }; Returns: boolean }
       verify_patient_otp_challenge: {
         Args: { p_code_hash: string; p_contact_hash: string; p_ip_hash: string }
         Returns: Json
       }
       watson_whatsapp: { Args: { p_token: string }; Returns: Json }
       whatsapp_add_document: {
-        Args: {
-          p_file_name: string
-          p_media_type: string
-          p_phone: string
-          p_size_bytes: number
-        }
+        Args: { p_file_name: string; p_media_type: string; p_phone: string; p_size_bytes: number }
         Returns: Json
       }
-      whatsapp_confirm_document: {
-        Args: { p_document_id: string }
-        Returns: Json
-      }
-      whatsapp_due_reminders: { Args: never; Returns: Json }
-      whatsapp_gateway_contacts: { Args: never; Returns: Json }
+      whatsapp_confirm_document: { Args: { p_document_id: string }; Returns: Json }
+      whatsapp_due_reminders: { Args: Record<PropertyKey, never>; Returns: Json }
+      whatsapp_gateway_contacts: { Args: Record<PropertyKey, never>; Returns: Json }
       whatsapp_gateway_seen: { Args: { p_status: string }; Returns: Json }
-      whatsapp_gateway_state_read: { Args: never; Returns: Json }
+      whatsapp_gateway_state_read: { Args: Record<PropertyKey, never>; Returns: Json }
       whatsapp_gateway_state_write: { Args: { p_changes: Json }; Returns: Json }
-      whatsapp_gateway_unreachable: { Args: never; Returns: Json }
+      whatsapp_gateway_unreachable: { Args: Record<PropertyKey, never>; Returns: Json }
       whatsapp_receive: {
         Args: {
           p_body: string
@@ -1536,10 +1818,7 @@ export type Database = {
         }
         Returns: Json
       }
-      whatsapp_reminder_sent: {
-        Args: { p_consultation: string }
-        Returns: Json
-      }
+      whatsapp_reminder_sent: { Args: { p_consultation: string }; Returns: Json }
       whatsapp_sent: {
         Args: {
           p_body: string
@@ -1576,20 +1855,12 @@ export type Database = {
         | "consent_withdrawn"
         | "archived"
       document_reading: "waiting" | "reading" | "read" | "unreadable" | "failed"
-      job_stage:
-        | "validating"
-        | "transcribing_practitioner"
-        | "transcribing_patient"
-        | "merging"
+      job_stage: "validating" | "transcribing_practitioner" | "transcribing_patient" | "merging"
       job_status: "queued" | "processing" | "completed" | "failed" | "cancelled"
       speaker: "practitioner" | "patient"
       track_validation: "pending" | "valid" | "invalid"
       transcript_ordering: "exact" | "approximate"
-      transcript_review_status:
-        | "unreviewed"
-        | "under_review"
-        | "reviewed"
-        | "superseded"
+      transcript_review_status: "unreviewed" | "under_review" | "reviewed" | "superseded"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1605,25 +1876,21 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
         Row: infer R
       }
       ? R
@@ -1634,14 +1901,12 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
@@ -1659,14 +1924,12 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
@@ -1684,14 +1947,12 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never) = never,
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
@@ -1701,14 +1962,12 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never) = never,
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
@@ -1740,22 +1999,12 @@ export const Constants = {
         "archived",
       ],
       document_reading: ["waiting", "reading", "read", "unreadable", "failed"],
-      job_stage: [
-        "validating",
-        "transcribing_practitioner",
-        "transcribing_patient",
-        "merging",
-      ],
+      job_stage: ["validating", "transcribing_practitioner", "transcribing_patient", "merging"],
       job_status: ["queued", "processing", "completed", "failed", "cancelled"],
       speaker: ["practitioner", "patient"],
       track_validation: ["pending", "valid", "invalid"],
       transcript_ordering: ["exact", "approximate"],
-      transcript_review_status: [
-        "unreviewed",
-        "under_review",
-        "reviewed",
-        "superseded",
-      ],
+      transcript_review_status: ["unreviewed", "under_review", "reviewed", "superseded"],
     },
   },
 } as const

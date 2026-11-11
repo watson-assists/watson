@@ -19,6 +19,8 @@ jobs:
       - uses: denoland/setup-deno@v2
         with: { deno-version: v2.5.6 }
       - run: pnpm install --frozen-lockfile
+      - name: Enforce synthetic data mode
+        run: scripts/check-data-mode.sh
       - name: Web app
         working-directory: apps/web
         run: pnpm lint && pnpm typecheck && pnpm exec vitest run src
@@ -39,11 +41,13 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24.11.1, cache: pnpm }
       - uses: supabase/setup-cli@v1
-        with: { version: 2.106.0 }
+        with: { version: 2.122.1 }
       # The WhatsApp function's tests run it with Deno against the local database.
       - uses: denoland/setup-deno@v2
         with: { deno-version: v2.5.6 }
       - run: supabase start -x analytics,vector,imgproxy,edge-runtime,studio,inbucket
+      - name: Enforce synthetic data mode
+        run: scripts/check-data-mode.sh
       - run: pnpm install --frozen-lockfile
       - name: Database tests
         working-directory: apps/web

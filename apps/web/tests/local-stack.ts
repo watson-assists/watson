@@ -83,6 +83,14 @@ export async function claimFormJob(engine: Practitioner, consultationId: string)
 /** A finished transcript of one patient line and a queued form job, as transcription would leave them. */
 export function transcriptWithFormJob(consultationId: string) {
   sqlAsOwner(`
+    update public.consultations
+      set form_template_version_id = coalesce(
+        form_template_version_id,
+        (select id from public.form_template_versions
+         where is_built_in and template_key = 'watson_standard'
+         order by version_number desc limit 1)
+      )
+      where id = '${consultationId}';
     with j as (insert into public.transcription_jobs (consultation_id, requested_by, status, finished_at)
                select id, practitioner_id, 'completed', now() from public.consultations where id = '${consultationId}' returning id),
     t as (insert into public.transcripts (consultation_id, job_id, schema_version, ordering, low_confidence_threshold, tracks)

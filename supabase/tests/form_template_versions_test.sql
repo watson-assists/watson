@@ -22,31 +22,31 @@ grant select, insert, update, delete on test_form_version_state to authenticated
 insert into test_form_version_state (key, id)
 select 'built_in', id
 from public.form_template_versions
-where is_built_in;
+where is_built_in and template_key = 'watson_standard';
 
 select is(
   (select count(*) from test_form_version_state where key = 'built_in'),
   1::bigint,
-  'the built-in form is represented by one immutable version'
+  'the Watson built-in is represented by one immutable version'
 );
 
 select results_eq(
-  $$select template_key from public.form_template_versions where is_built_in$$,
-  array['watson_standard'],
-  'the existing built-in has a stable product key'
+  $$select template_key from public.form_template_versions where is_built_in order by template_key$$,
+  $$values ('massage_assessment_en_sk'::text), ('watson_standard'::text)$$,
+  'both built-ins have stable product keys'
 );
 
 select results_eq(
-  $$select schema_version from public.form_template_versions where is_built_in$$,
-  array[1],
-  'the existing built-in records its definition schema version'
+  $$select schema_version from public.form_template_versions where is_built_in order by template_key$$,
+  $$values (2), (1)$$,
+  'each built-in records its definition schema version'
 );
 
 select ok(
-  (select definition_hash ~ '^[0-9a-f]{64}$'
-     and definition_hash = private.form_template_definition_hash(definition)
+  (select bool_and(definition_hash ~ '^[0-9a-f]{64}$'
+     and definition_hash = private.form_template_definition_hash(definition))
    from public.form_template_versions where is_built_in),
-  'the built-in stores a canonical definition hash'
+  'the built-ins store canonical definition hashes'
 );
 
 set local role authenticated;
@@ -54,8 +54,8 @@ set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 
 select results_eq(
   $$select count(*) from public.form_template_versions where is_built_in$$,
-  array[1::bigint],
-  'a practitioner can read the built-in version'
+  array[2::bigint],
+  'a practitioner can read both built-in versions'
 );
 
 insert into test_form_version_state (key, id, payload)
@@ -101,7 +101,13 @@ select results_eq(
 );
 
 -- Created before a Practice default exists: this remains deliberately
--- unpinned so the late-pinning guard can be exercised below.
+-- unpinned so the legacy-record late-pinning guard can be exercised below.
+-- New consultations always receive the Watson fallback; suppress only that
+-- deployment trigger while constructing this historical row.
+reset role;
+alter table public.consultations disable trigger consultations_apply_default_form_template_version;
+set local role authenticated;
+set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 insert into test_form_version_state (key, id, payload)
 select 'consultation_three', (result ->> 'consultation_id')::uuid, result
 from (
@@ -111,6 +117,10 @@ from (
     p_consent_recorded => false
   ) as result
 ) created;
+reset role;
+alter table public.consultations enable trigger consultations_apply_default_form_template_version;
+set local role authenticated;
+set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 
 select ok(
   (select public.set_default_form_template_version(id) ->> 'ok' = 'true'
@@ -294,7 +304,7 @@ select lives_ok(
   $$insert into public.form_template_versions (
       template_key, version_number, schema_version, definition, is_built_in, origin
     ) values (
-      'massage_assessment_en_sk', 1, 2,
+      'future_built_in', 1, 2,
       private.watson_form(), true, 'built_in'
     )$$,
   'another built-in template key can start at version one'
@@ -304,7 +314,7 @@ select throws_ok(
   $$insert into public.form_template_versions (
       template_key, version_number, schema_version, definition, is_built_in, origin
     ) values (
-      'massage_assessment_en_sk', 1, 2,
+      'future_built_in', 1, 2,
       private.watson_form(), true, 'built_in'
     )$$,
   '23505',

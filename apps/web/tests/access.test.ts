@@ -43,7 +43,9 @@ describe("a practitioner", () => {
     expect(after.data?.status).toBe("ready_for_audio");
     expect((await anna.client.from("audio_tracks").select("id")).data).toHaveLength(1);
     const events = await anna.client.from("audit_events").select("event_type").eq("consultation_id", annas).order("seq");
-    expect(events.data?.map((event) => event.event_type)).toEqual(["consultation.created", "consent.recorded", "audio.imported"]);
+    expect(events.data?.map((event) => event.event_type)).toEqual([
+      "form_template.pinned", "consultation.created", "consent.recorded", "audio.imported",
+    ]);
   });
 
   it("cannot act on someone else's consultation", async () => {

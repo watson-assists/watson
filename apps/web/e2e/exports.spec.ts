@@ -31,14 +31,33 @@ async function filledIn(account: { email: string; password: string }, name: stri
           select '${id}', id, '2.0.0', 'exact', 0.5, '[]' from j returning id),
     s as (insert into public.transcript_segments (id, transcript_id, position, speaker, start_seconds, end_seconds, machine_text)
           select gen_random_uuid(), t.id, 0, 'patient', 3, 6, 'I wake at three every night.' from t returning 1),
-    fj as (insert into public.form_jobs (consultation_id, transcript_id, status, finished_at)
-           select '${id}', t.id, 'completed', now() from t returning id, transcript_id),
+    fj as (insert into public.form_jobs (
+             consultation_id, transcript_id, form_template_version_id, status, finished_at
+           )
+           select '${id}', t.id,
+             coalesce(
+               (select form_template_version_id from public.consultations where id = '${id}'),
+               (select id from public.form_template_versions
+                where is_built_in and template_key = 'watson_standard'
+                order by version_number desc limit 1)
+             ),
+             'completed', now()
+           from t returning id, transcript_id),
     f as (insert into public.forms (consultation_id, job_id, transcript_id, template)
           select '${id}', fj.id, fj.transcript_id, private.watson_form() from fj returning id)
-    insert into public.form_answers (form_id, field_key, position, machine_text, evidence)
+    insert into public.form_answers (
+      form_id, field_key, position, machine_text, evidence,
+      answer_state, machine_state, machine_value
+    )
       select f.id, field ->> 'key', n - 1,
              case field ->> 'key' when 'sleep' then 'Wakes at three every night' when 'age' then '42' end,
-             case when field ->> 'key' = 'sleep' then '{0}'::int[] else '{}'::int[] end
+             case when field ->> 'key' = 'sleep' then '{0}'::int[] else '{}'::int[] end,
+             case when field ->> 'key' in ('sleep', 'age') then 'known' else 'unanswered' end,
+             case when field ->> 'key' in ('sleep', 'age') then 'known' else 'unanswered' end,
+             case field ->> 'key'
+               when 'sleep' then to_jsonb('Wakes at three every night'::text)
+               when 'age' then to_jsonb('42'::text)
+             end
       from f, jsonb_array_elements((select jsonb_agg(x) from jsonb_array_elements(private.watson_form() -> 'sections') s,
                                     jsonb_array_elements(s -> 'fields') x)) with ordinality as e(field, n);
     update public.consultations set status = 'draft_ready' where id = '${id}';`);
@@ -101,9 +120,9 @@ test("private notes are the practitioner's to write", async ({ page, account, pr
   expect(problems).toEqual([]);
 });
 
-test("without a form of their own, the practitioner fills in Watson's with one press", async ({ page, problems }) => {
-  // A practitioner of its own: pressing the button gives them Watson's form, which must not reach the
-  // account the other tests share.
+test("without a custom form, the practitioner automatically gets Watson's built-in", async ({ page, problems }) => {
+  // A practitioner of its own gets the immutable Watson fallback, which must not affect the account
+  // the other tests share.
   const who = await newPractitioner(localStack(), "no-form");
   const account = { email: who.email, password: PASSWORD, references: [] };
   const client = await as(account);
@@ -121,8 +140,6 @@ test("without a form of their own, the practitioner fills in Watson's with one p
     update public.consultations set status = 'transcript_ready' where id = '${id}';`);
   await signIn(page, account);
   await page.goto(`/consultation/?id=${id}`);
-  await expect(page.getByText("Your form is not set up yet")).toBeVisible();
-  await page.getByRole("button", { name: "Fill in the form" }).click();
   await expect(page.getByRole("heading", { name: "Filling in your form" })).toBeVisible();
   expect(problems).toEqual([]);
 });

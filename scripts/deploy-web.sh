@@ -18,6 +18,7 @@
 # under the owner's own Render account; Render keeps that name, so old links there no longer open.
 export RENDER_CLI_CONFIG_PATH="${RENDER_CLI_CONFIG_PATH:-$HOME/.render/profiles/watson-assists.yaml}"
 set -euo pipefail
+"$(dirname "$0")/check-data-mode.sh"
 service=${WATSON_RENDER_SERVICE:-srv-dbedrugm7kps73diurlg}
 render deploys create "$service" --confirm -o json >/dev/null
 for _ in $(seq 1 90); do

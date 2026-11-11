@@ -22,14 +22,17 @@ import { dateTime, dayMonth, LANGUAGE_LABEL, summarise, WITHDRAWABLE } from "@/l
 import { shownPatient, type Shown } from "@/lib/patient";
 import { earlierPatients } from "@/lib/records";
 import { supabase } from "@/lib/supabase";
+import { answerText, type FormAnswer, type FormTemplate } from "@/lib/export";
 
 type Consultation = Tables<"consultations">;
 type Track = Tables<"audio_tracks">;
 type Patient = Pick<Tables<"patients">, "id" | "name" | "phone" | "email">;
-type History = Pick<Consultation, "id" | "scheduled_at" | "language" | "status">;
+type History = Pick<Consultation, "id" | "scheduled_at" | "language" | "status" | "patient_association_state">;
+type PreviousContext = { scheduledAt: string; template: FormTemplate; answers: FormAnswer[] };
 type Loaded = {
   consultation: Consultation; tracks: Track[]; audioLeft: boolean; hasTranscript: boolean; patient: Patient | null;
   shown: Shown | null; candidate: Candidate | null; history: History[] | "failed" | null;
+  previousContext: PreviousContext | null;
 };
 const SPEAKERS = ["practitioner", "patient"] as const;
 const FORM_STATUSES = ["transcript_ready", "transcript_reviewed", "extraction_processing", "extraction_failed",
@@ -94,11 +97,25 @@ function ConsultationView({ userId }: { userId: string }) {
       ? (await supabase.from("patients").select("id, name, phone, email").eq("id", row.patient_id).maybeSingle()).data
       : null;
     const earlierConsultations = row.patient_id
-      ? await supabase.from("consultations").select("id, scheduled_at, language, status")
+      ? await supabase.from("consultations").select("id, scheduled_at, language, status, patient_association_state")
         .eq("patient_id", row.patient_id).neq("id", row.id).lt("scheduled_at", row.scheduled_at)
         .filter("released", "eq", false).order("scheduled_at", { ascending: false })
       : null;
     const history = earlierConsultations?.error ? "failed" : earlierConsultations?.data ?? null;
+    let previousContext: PreviousContext | null = null;
+    if (row.previous_consultation_id) {
+      const [previous, previousForm] = await Promise.all([
+        supabase.from("consultations").select("scheduled_at").eq("id", row.previous_consultation_id).maybeSingle(),
+        supabase.from("forms").select("template, form_answers(field_key, machine_text, practitioner_text, review, value_type, answer_state, machine_value, practitioner_value)")
+          .eq("consultation_id", row.previous_consultation_id).eq("status", "approved")
+          .order("revision_number", { ascending: false }).limit(1).maybeSingle(),
+      ]);
+      if (previous.data && previousForm.data) previousContext = {
+        scheduledAt: previous.data.scheduled_at,
+        template: previousForm.data.template as unknown as FormTemplate,
+        answers: previousForm.data.form_answers as FormAnswer[],
+      };
+    }
     // Who it is with, and whom to ask about (components/patient-check.tsx).
     const columns = { ...row, patients: patient };
     const earlier = await earlierPatients([columns]);
@@ -109,7 +126,7 @@ function ConsultationView({ userId }: { userId: string }) {
         .eq(row.patient_claim_phone ? "phone" : "email", row.patient_claim_phone ?? row.patient_claim_email!).maybeSingle()).data
       : null;
     return { consultation: row, tracks: tracks.data, audioLeft: files.length > 0,
-      hasTranscript: transcript.data !== null, patient, shown, candidate, history };
+      hasTranscript: transcript.data !== null, patient, shown, candidate, history, previousContext };
   }, [id, userId]);
   const load = useCallback(() => {
     fetchAll().then(setLoaded);
@@ -132,7 +149,7 @@ function ConsultationView({ userId }: { userId: string }) {
   }
   if (loaded === null) return <p className="wa-meta" role="status">Loading the consultation…</p>;
 
-  const { consultation, tracks, audioLeft, hasTranscript, patient, shown, candidate, history } = loaded;
+  const { consultation, tracks, audioLeft, hasTranscript, patient, shown, candidate, history, previousContext } = loaded;
   const status = consultation.status;
   const language = LANGUAGE_LABEL[consultation.language];
 
@@ -285,6 +302,11 @@ function ConsultationView({ userId }: { userId: string }) {
       {shown?.check && <PatientCheck consultationId={consultation.id} shown={shown} candidate={candidate} onChanged={load} />}
       {!["consent_withdrawn", "archived"].includes(status) && <PatientPanel consultation={consultation} patient={shown} onChanged={load} />}
 
+      <PreviousAppointmentSelector key={consultation.previous_consultation_id ?? "unlinked"}
+        consultation={consultation} history={history} onChanged={load} onProblem={setProblem} />
+
+      {previousContext && <PreviousValues context={previousContext} />}
+
       <PatientHistory history={history} />
 
       {!["consent_withdrawn", "archived"].includes(status) && <DocumentsPanel consultationId={consultation.id} patient={patient} person={shown} onChanged={load} />}
@@ -317,6 +339,85 @@ function ConsultationView({ userId }: { userId: string }) {
         </aside>
       )}
     </>
+  );
+}
+
+function PreviousValues({ context }: { context: PreviousContext }) {
+  const answers = new Map(context.answers.map((answer) => [answer.field_key, answer]));
+  return <section className="wa-panel" aria-labelledby="previous-values-title">
+    <h2 className="wa-heading" id="previous-values-title">Dated values from {dateTime(context.scheduledAt)}</h2>
+    <p className="wa-hint">Read-only historical context. These values are never copied into the current form.</p>
+    {context.template.sections.map((section) => <div key={section.title}>
+      <h3 className="wa-label">{section.title}</h3>
+      <dl className="wa-printed__answers">{section.fields.map((field) => {
+        const value = answerText(answers.get(field.key), field);
+        return value ? <div key={field.key}><dt>{field.label}</dt><dd>{value}</dd></div> : null;
+      })}</dl>
+    </div>)}
+  </section>;
+}
+
+function PreviousAppointmentSelector({ consultation, history, onChanged, onProblem }: {
+  consultation: Consultation;
+  history: History[] | "failed" | null;
+  onChanged: () => void;
+  onProblem: (message: string | null) => void;
+}) {
+  const [selected, setSelected] = useState(consultation.previous_consultation_id ?? "");
+  const [busy, setBusy] = useState(false);
+  const eligible = Array.isArray(history)
+    ? history.filter((item) => ["verified", "practitioner_confirmed"].includes(item.patient_association_state))
+    : [];
+
+  if (!["consent_pending", "ready_for_audio"].includes(consultation.status)
+      || consultation.patient_id === null
+      || !["verified", "practitioner_confirmed"].includes(consultation.patient_association_state)
+      || history === null
+      || history === "failed") return null;
+
+  async function save() {
+    setBusy(true);
+    onProblem(null);
+    const outcome = await call("link_previous_consultation", {
+      p_consultation_id: consultation.id,
+      p_previous_consultation_id: selected || null,
+    });
+    setBusy(false);
+    if (!outcome.ok) return onProblem(explain(outcome.error_category));
+    onChanged();
+  }
+
+  return (
+    <section className="wa-panel" aria-labelledby="previous-appointment-title">
+      <h2 className="wa-heading" id="previous-appointment-title">Previous appointment</h2>
+      <p className="wa-hint" id="previous-appointment-hint">
+        Optional. Link one earlier appointment for this confirmed patient. Its approved values remain dated history, not current answers.
+      </p>
+      {eligible.length === 0 ? (
+        <p className="wa-text">No eligible earlier appointment is available to link.</p>
+      ) : (
+        <div className="wa-fields-row" style={{ alignItems: "end" }}>
+          <div className="wa-field">
+            <label className="wa-label" htmlFor="previous-appointment">Earlier appointment</label>
+            <div className="wa-select">
+              <select id="previous-appointment" value={selected} aria-describedby="previous-appointment-hint"
+                onChange={(event) => setSelected(event.target.value)}>
+                <option value="">Not linked</option>
+                {eligible.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {dateTime(item.scheduled_at)} · {LANGUAGE_LABEL[item.language]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <button type="button" className="wa-button wa-button--secondary" disabled={busy || selected === (consultation.previous_consultation_id ?? "")}
+            aria-busy={busy || undefined} onClick={save}>
+            {busy ? "Saving…" : "Save link"}
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 

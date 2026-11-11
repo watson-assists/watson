@@ -20,7 +20,7 @@ from .audio import audio_duration_seconds
 from .config import AUDIO_FORMATS, Settings
 from .documents import Reader
 from .errors import ErrorCategory, Stopped, WorkerError
-from .form import Cancelled, Line, LlamaModel, Template, document_lines, fill
+from .form import Cancelled, Line, LlamaModel, Template, coverage, document_lines, fill
 from .log import log_event
 from .merge import merge
 from .schema import Speaker, Track, Transcript, TranscriptionModel
@@ -255,7 +255,26 @@ class Engine:
                     path, piece["language"], self.settings, lambda: False, hints=hints
                 )
             text = " ".join(s.text for s in heard.segments if not s.possibly_not_speech)
-            self.main.rpc("engine_live_piece_done", {"p_id": piece["id"], "p_text": text})
+            result = self.main.rpc("engine_live_piece_done", {"p_id": piece["id"], "p_text": text})
+            if (
+                result.get("ok")
+                and text
+                and piece.get("provisional_enabled")
+                and piece.get("template")
+            ):
+                try:
+                    keys = coverage(
+                        self._load_form_model(),
+                        Template.model_validate(piece["template"]),
+                        Line(0, piece["speaker"], text),
+                        piece.get("language") or "",
+                    )
+                    self.main.rpc(
+                        "engine_record_provisional_coverage",
+                        {"p_piece_id": piece["id"], "p_field_keys": keys},
+                    )
+                except Exception as exc:
+                    log_event("provisional_coverage.failed", exception_type=type(exc).__name__)
         except Exception as exc:
             log_event("live_piece.failed", exception_type=type(exc).__name__)
             self.main.rpc("engine_live_piece_failed", {"p_id": piece["id"]})
@@ -382,7 +401,7 @@ class Engine:
                 heartbeat.stopped.is_set,
                 documents,
             )
-            answered = sum(1 for a in answers if a.text is not None)
+            answered = sum(1 for a in answers if a.state != "unanswered")
             metrics = {
                 "form_model_name": self.settings.form_model_file,
                 "form_duration_seconds": model.last_seconds,
@@ -399,6 +418,9 @@ class Engine:
                         {
                             "key": a.key,
                             "text": a.text,
+                            "value_type": a.value_type,
+                            "value": a.value,
+                            "state": a.state,
                             "evidence": a.evidence,
                             "documents": [
                                 {"document_id": q.document_id, "page": q.page, "text": q.text}

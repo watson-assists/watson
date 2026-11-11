@@ -26,6 +26,21 @@ const CHANGED_DEFAULT = {
 };
 
 describe("pinned form-template processing", () => {
+  it("pins the Watson built-in when a new practitioner has not chosen a default", async () => {
+    const owner = await newPractitioner(stack, "template-fallback-owner");
+    const made = await rpc(owner.client, "create_consultation", {
+      p_scheduled_at: "2026-11-29T09:00:00Z",
+      p_language: "en",
+      p_consent_recorded: true,
+    });
+    expect(sqlAsOwner(`
+      select v.template_key
+      from public.consultations c
+      join public.form_template_versions v on v.id = c.form_template_version_id
+      where c.id = '${made.consultation_id}';
+    `)).toBe("watson_standard");
+  });
+
   it("claims, validates, and stores the consultation's immutable version", async () => {
     const owner = await newPractitioner(stack, "template-pin-owner");
     const engine = await newEngine(stack, "template-pin-engine");
@@ -35,16 +50,13 @@ describe("pinned form-template processing", () => {
     const versionId = createdVersion.version_id as string;
     expect(createdVersion).toMatchObject({ ok: true, template_key: "custom", version_number: 1 });
 
-    const made = await rpc(owner.client, "create_consultation", {
+    const made = await rpc(owner.client, "create_consultation_with_template", {
       p_scheduled_at: "2026-11-30T09:00:00Z",
       p_language: "en",
       p_consent_recorded: true,
+      p_form_template_version_id: versionId,
     });
     const consultationId = made.consultation_id as string;
-    expect(await rpc(owner.client, "pin_consultation_form_template", {
-      p_consultation_id: consultationId,
-      p_version_id: versionId,
-    })).toMatchObject({ ok: true, version_id: versionId });
 
     transcriptWithFormJob(consultationId);
     expect(await rpc(owner.client, "set_form_template", { p_definition: CHANGED_DEFAULT }))

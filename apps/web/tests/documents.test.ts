@@ -249,6 +249,7 @@ describe("the engine", () => {
   });
 
   it("may quote only the documents of the consultation's own patient in a form", async () => {
+    expect(await rpc(eva.client, "set_form_template", { p_definition: JSON.parse(TEMPLATE) })).toEqual({ ok: true });
     const { id, invite_token: token } = await consultation(eva);
     const own = await sendDocument(token);
     const ownJob = await claim(own.id);
@@ -259,7 +260,6 @@ describe("the engine", () => {
     await rpc(engine.client, "engine_complete_document", { p_document_id: stranger.id, p_attempt: strangerJob.attempt, p_pages: ["Someone else's results"] });
 
     // A transcript and a form job, as transcription would leave them.
-    expect(await rpc(eva.client, "set_form_template", { p_definition: JSON.parse(TEMPLATE) })).toEqual({ ok: true });
     transcriptWithFormJob(id);
     const job = await claimFormJob(engine, id);
     expect(job.documents).toEqual([expect.objectContaining({ document_id: own.id, pages: ["Ferritin 9 µg/L, low"] })]);

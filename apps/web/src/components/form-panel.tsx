@@ -14,7 +14,8 @@ import { supabase } from "@/lib/supabase";
 
 type Read = {
   job: Tables<"form_jobs"> | null;
-  form: Pick<Tables<"forms">, "id" | "status" | "approved_at" | "template"> | null;
+  form: Pick<Tables<"forms">, "id" | "status" | "approved_at" | "template" |
+    "form_template_version_id" | "revision_number" | "revision_kind"> | null;
   answered: number;
   total: number;
   engine: Engine | null;
@@ -36,13 +37,17 @@ export function FormPanel({ consultationId, status, onChanged }: {
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [versions, setVersions] = useState<Pick<Tables<"form_template_versions">,
+    "id" | "template_key" | "version_number" | "definition">[]>([]);
+  const [revisionTemplate, setRevisionTemplate] = useState("");
 
   const read = useCallback(async (): Promise<Read> => {
     const [job, form, engine] = await Promise.all([
       supabase.from("form_jobs").select("*").eq("consultation_id", consultationId)
         .order("queued_at", { ascending: false }).limit(1).maybeSingle(),
-      supabase.from("forms").select("id, status, approved_at, template").eq("consultation_id", consultationId)
-        .neq("status", "superseded").maybeSingle(),
+      supabase.from("forms").select("id, status, approved_at, template, form_template_version_id, revision_number, revision_kind")
+        .eq("consultation_id", consultationId).neq("status", "superseded")
+        .order("revision_number", { ascending: false }).limit(1).maybeSingle(),
       engineStatus(),
     ]);
     const answers = form.data
@@ -53,6 +58,18 @@ export function FormPanel({ consultationId, status, onChanged }: {
       answered: answers.filter((answer) => answer.machine_text !== null).length, total: answers.length,
     };
   }, [consultationId]);
+
+  useEffect(() => {
+    let alive = true;
+    supabase.from("form_template_versions")
+      .select("id, template_key, version_number, definition")
+      .order("template_key").order("version_number", { ascending: false })
+      .then(({ data }) => {
+        if (!alive) return;
+        setVersions(data ?? []);
+      });
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -92,6 +109,21 @@ export function FormPanel({ consultationId, status, onChanged }: {
       return setProblem(explain(chosen.error_category));
     }
     await retry();
+  }
+
+  async function createRevision() {
+    if (!form?.form_template_version_id) return;
+    const chosen = revisionTemplate || form.form_template_version_id;
+    setBusy(true);
+    setProblem(null);
+    const outcome = await call("queue_form_revision", {
+      p_consultation_id: consultationId,
+      p_form_template_version_id: chosen,
+      p_revision_kind: chosen === form.form_template_version_id ? "correction" : "historical_conversion",
+    });
+    setBusy(false);
+    if (!outcome.ok) return setProblem(explain(outcome.error_category));
+    onChanged();
   }
 
   if (seen === null) return <p className="wa-meta" role="status">Loading the form…</p>;
@@ -165,6 +197,29 @@ export function FormPanel({ consultationId, status, onChanged }: {
         {approved ? `Approved ${form.approved_at ? dateTime(form.approved_at) : ""}.`
           : "Watson filled in your form from the conversation. Each answer shows the words it came from."}
       </p>
+      {approved && (
+        <div className="wa-form" style={{ marginTop: 16 }}>
+          <p className="wa-hint">Create an append-only correction, or convert the retained final transcript to another immutable form. This approved revision stays unchanged.</p>
+          <div className="wa-fields-row" style={{ alignItems: "end" }}>
+            <div className="wa-field">
+              <label className="wa-label" htmlFor={`revision-template-${consultationId}`}>Revision form</label>
+              <div className="wa-select"><select id={`revision-template-${consultationId}`}
+                value={revisionTemplate || form.form_template_version_id || ""}
+                onChange={(event) => setRevisionTemplate(event.target.value)}>
+                {versions.map((version) => <option key={version.id} value={version.id}>
+                  {(version.definition as { title?: string }).title ?? version.template_key} · v{version.version_number}
+                </option>)}
+              </select></div>
+            </div>
+            <button type="button" className="wa-button wa-button--secondary"
+              disabled={busy || versions.length === 0 || !form.form_template_version_id}
+              onClick={() => void createRevision()}>
+              {revisionTemplate && revisionTemplate !== form.form_template_version_id ? "Convert transcript" : "Create correction"}
+            </button>
+          </div>
+        </div>
+      )}
+      {problem && <p className="wa-error" role="alert">{problem}</p>}
     </section>
   );
 }

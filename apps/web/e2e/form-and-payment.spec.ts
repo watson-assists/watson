@@ -31,11 +31,26 @@ function filledForm(consultationId: string, template = TEMPLATE) {
     s as (insert into public.transcript_segments (id, transcript_id, position, speaker, start_seconds, end_seconds, machine_text)
           select gen_random_uuid(), t.id, x.n - 1, x.who::public.speaker, x.n * 5, x.n * 5 + 4, x.said
           from t, (values ${lines.map(([who, said], i) => `(${i + 1}, '${who}', '${said.replace(/'/g, "''")}')`).join(", ")}) as x(n, who, said) returning 1),
-    fj as (insert into public.form_jobs (consultation_id, transcript_id, status, claimed_at, finished_at)
-           select '${consultationId}', id, 'completed', now() - interval '4 minutes', now() from t returning id, transcript_id),
+    fj as (insert into public.form_jobs (
+             consultation_id, transcript_id, form_template_version_id, status, claimed_at, finished_at
+           )
+           select '${consultationId}', id,
+             coalesce(
+               (select form_template_version_id from public.consultations where id = '${consultationId}'),
+               (select id from public.form_template_versions
+                where is_built_in and template_key = 'watson_standard'
+                order by version_number desc limit 1)
+             ),
+             'completed', now() - interval '4 minutes', now()
+           from t returning id, transcript_id),
      f as (insert into public.forms (consultation_id, job_id, transcript_id, template)
            select '${consultationId}', id, transcript_id, '${template.replace(/'/g, "''")}'::jsonb from fj returning id)
     insert into public.form_answers (form_id, field_key, position, machine_text, evidence) values ${rows.join(", ")};
+    update public.form_answers
+      set answer_state = case when machine_text is null then 'unanswered' else 'known' end,
+          machine_state = case when machine_text is null then 'unanswered' else 'known' end,
+          machine_value = case when machine_text is null then null else to_jsonb(machine_text) end
+      where form_id = (select id from public.forms where consultation_id = '${consultationId}');
     update public.consultations set status = 'draft_ready' where id = '${consultationId}';
     with p as (insert into public.patients (practitioner_id, name, phone)
                select practitioner_id, 'Jana Nováková', '+4219' || floor(random() * 90000000 + 10000000)::text

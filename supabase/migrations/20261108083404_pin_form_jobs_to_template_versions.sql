@@ -14,9 +14,16 @@ language plpgsql security definer set search_path = ''
 as $$
 begin
   if new.form_template_version_id is null then
-    select d.form_template_version_id into new.form_template_version_id
-    from public.form_template_defaults d
-    where d.practitioner_id = new.practitioner_id;
+    select coalesce(
+      (select d.form_template_version_id
+       from public.form_template_defaults d
+       where d.practitioner_id = new.practitioner_id),
+      (select v.id
+       from public.form_template_versions v
+       where v.is_built_in and v.template_key = 'watson_standard'
+       order by v.version_number desc
+       limit 1)
+    ) into new.form_template_version_id;
   end if;
   return new;
 end;

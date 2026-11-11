@@ -13,6 +13,8 @@ import { call, explain } from "@/lib/api";
 import { asClock, asDateInput, fromDateInputAndClock, fromDayAndClock } from "@/lib/dates";
 import { feeSchema, fromCents, toCents } from "@/lib/fee";
 import { PAYMENTS } from "@/lib/features";
+import { defaultTemplateId, templateLabel } from "@/lib/form-templates";
+import type { Tables } from "@/lib/database.types";
 import { RequireSession } from "@/lib/session";
 import { LANGUAGE_LABEL } from "@/lib/status";
 import { supabase } from "@/lib/supabase";
@@ -27,6 +29,7 @@ const schema = z.object({
   // The patient (owner, 24 Oct): name and phone or email together, or neither (the patient gives them).
   patient_name: z.string().max(120, "Keep the name under 120 characters."),
   patient_contact: z.string().max(254, "Keep it under 254 characters."),
+  form_template_version_id: z.string().uuid("Choose a consultation form."),
 }).superRefine((values, context) => {
   const name = values.patient_name.trim();
   const contact = values.patient_contact.trim();
@@ -40,11 +43,14 @@ export default function NewConsultationPage() {
 }
 
 type Known = { name: string; phone: string | null; email: string | null };
+type TemplateVersion = Pick<Tables<"form_template_versions">,
+  "id" | "template_key" | "version_number" | "schema_version" | "definition">;
 
 function NewConsultation() {
   const router = useRouter();
   const [failure, setFailure] = useState<string | null>(null);
   const [known, setKnown] = useState<Known[]>([]);
+  const [templates, setTemplates] = useState<TemplateVersion[]>([]);
   const {
     register,
     handleSubmit,
@@ -54,7 +60,7 @@ function NewConsultation() {
     formState: { errors, isSubmitting },
   } = useForm<Values>({
     resolver: zodResolver(schema),
-    defaultValues: { day: "", clock: "", language: "en", consent_recorded: true, scenario_notes: "", fee: "", patient_name: "", patient_contact: "" },
+    defaultValues: { day: "", clock: "", language: "en", consent_recorded: true, scenario_notes: "", fee: "", patient_name: "", patient_contact: "", form_template_version_id: "" },
   });
 
   useEffect(() => {
@@ -63,6 +69,16 @@ function NewConsultation() {
     // The usual fee, set in Practice, unless the practitioner has typed one already.
     if (PAYMENTS) supabase.from("practitioner_profiles").select("fee_cents").maybeSingle().then(({ data }) => {
       if (data?.fee_cents && !getValues("fee")) setValue("fee", fromCents(data.fee_cents));
+    });
+    Promise.all([
+      supabase.from("form_template_versions")
+        .select("id, template_key, version_number, schema_version, definition")
+        .order("is_built_in", { ascending: false }).order("template_key").order("version_number", { ascending: false }),
+      supabase.from("form_template_defaults").select("form_template_version_id").maybeSingle(),
+    ]).then(([available, current]) => {
+      const rows = available.data ?? [];
+      setTemplates(rows);
+      setValue("form_template_version_id", defaultTemplateId(rows, current.data?.form_template_version_id));
     });
   }, [getValues, setValue]);
 
@@ -74,7 +90,7 @@ function NewConsultation() {
 
   async function create(values: Values) {
     setFailure(null);
-    const outcome = await call<{ consultation_id: string }>("create_consultation", {
+    const outcome = await call<{ consultation_id: string }>("create_consultation_with_template", {
       p_scheduled_at: fromDateInputAndClock(values.day, values.clock)!.toISOString(),
       p_language: values.language,
       p_consent_recorded: values.consent_recorded,
@@ -82,6 +98,7 @@ function NewConsultation() {
       p_fee_cents: toCents(values.fee) ?? undefined,
       p_patient_name: values.patient_name.trim() || undefined,
       p_patient_contact: values.patient_contact.trim() || undefined,
+      p_form_template_version_id: values.form_template_version_id,
     });
     if (outcome.ok) return router.push(`/consultation/?id=${outcome.consultation_id}`);
     if (outcome.field === "contact") return setError("patient_contact", { message: "That phone or email cannot be used. A phone needs its country code, like +421 905 123 456." });
@@ -151,6 +168,20 @@ function NewConsultation() {
                 </div>
                 <FieldError id="language-error" message={errors.language?.message} />
               </div>
+            </div>
+
+            <div className="wa-field">
+              <label className="wa-label" htmlFor="form-template">Consultation form</label>
+              <p className="wa-hint" id="form-template-hint">Pinned to this consultation. Changing the Practice default later will not change this record.</p>
+              <div className="wa-select">
+                <select id="form-template" aria-invalid={Boolean(errors.form_template_version_id)}
+                  aria-describedby="form-template-hint form-template-error" {...register("form_template_version_id")}>
+                  {templates.map((version) => (
+                    <option key={version.id} value={version.id}>{templateLabel(version)}</option>
+                  ))}
+                </select>
+              </div>
+              <FieldError id="form-template-error" message={errors.form_template_version_id?.message} />
             </div>
             <p className="wa-hint" id="language-hint" style={{ marginTop: -12 }}>
               English unless you choose another. The transcript is made in this language; &ldquo;Mixed or unsure&rdquo; lets Watson guess, which is less reliable.
