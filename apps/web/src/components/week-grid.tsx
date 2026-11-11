@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { clockTime, gridBounds, viewerZone, WEEKDAY_SHORT, WEEKDAYS, type Booking, type Busy, type Hours } from "@/lib/booking";
+import { clockTime, gridBounds, rollingDays, viewerZone, weekdayKey, WEEKDAY_SHORT, WEEKDAYS, type Booking, type Busy, type Hours } from "@/lib/booking";
 
 // The practitioner's week as an appointment book (design system: ScreenCalendar, ScreenPhoneCalendar):
 // bookings in ink, open times pencilled in, Google busy time hatched, hours nobody can book sunk.
 // Drawn on the viewer's clock. ponytail: hours are drawn as typed, so a practitioner abroad sees
 // their bookable band at home times; convert per zone if that ever matters.
 
-type Props = { monday: Date; hours: Hours; open: string[]; bookings: Booking[]; busy: Busy[]; now: Date };
+type Props = { start: Date; hours: Hours; open: string[]; bookings: Booking[]; busy: Busy[]; now: Date };
 /** Times as milliseconds: the database writes "+00:00" and the browser "Z", so strings do not compare. */
 type Item = { at: number; ends: number; kind: "booked" | "held" | "busy" | "open"; booking?: Booking };
 
@@ -52,10 +52,10 @@ function Block({ item, top, height, zone, length }: { item: Item; top: number; h
     : <div className={className} style={style}>{label(item, zone, length)}</div>;
 }
 
-export function WeekGrid({ monday, hours, open, bookings, busy, now, length }: Props & { length: number }) {
+export function WeekGrid({ start, hours, open, bookings, busy, now, length }: Props & { length: number }) {
   const zone = viewerZone();
   const [first, last] = gridBounds(hours);
-  const days = WEEKDAYS.map((_, i) => plus(monday, i));
+  const days = rollingDays(start);
   return (
     <section className="wa-week wa-only-wide" aria-label="Your week">
       <div className="wa-week__corner" aria-hidden />
@@ -65,7 +65,7 @@ export function WeekGrid({ monday, hours, open, bookings, busy, now, length }: P
         return (
           <div key={i} className="wa-week__head" aria-current={day.toDateString() === now.toDateString() ? "date" : undefined}>
             {WEEKDAY_SHORT.format(day)}<b>{day.getDate()}</b>
-            <span>{past ? "Past" : count ? `${count} open` : hours[String(i + 1)] ? "Full" : "Not bookable"}</span>
+            <span>{past ? "Past" : count ? `${count} open` : hours[weekdayKey(day)] ? "Full" : "Not bookable"}</span>
           </div>
         );
       })}
@@ -73,7 +73,7 @@ export function WeekGrid({ monday, hours, open, bookings, busy, now, length }: P
         {Array.from({ length: last - first }, (_, h) => <span key={h}>{String(first + h).padStart(2, "0")}:00</span>)}
       </div>
       {days.map((day, i) => {
-        const span = hours[String(i + 1)];
+        const span = hours[weekdayKey(day)];
         const opens = span ? Number(span[0].slice(0, 2)) + Number(span[0].slice(3)) / 60 : 0;
         const closes = span ? Number(span[1].slice(0, 2)) + Number(span[1].slice(3)) / 60 : 0;
         return (
@@ -95,9 +95,9 @@ export function WeekGrid({ monday, hours, open, bookings, busy, now, length }: P
 }
 
 /** On phones: one day at a time, as a list. */
-export function DayAgenda({ monday, hours, open, bookings, busy, now, length }: Props & { length: number }) {
+export function DayAgenda({ start, hours, open, bookings, busy, now, length }: Props & { length: number }) {
   const zone = viewerZone();
-  const days = WEEKDAYS.map((_, i) => plus(monday, i));
+  const days = rollingDays(start);
   const todayIndex = days.findIndex((day) => day.toDateString() === now.toDateString());
   const [chosen, setChosen] = useState(Math.max(0, todayIndex));
   const items = itemsOn(days[chosen], { open, bookings, busy });
@@ -109,7 +109,7 @@ export function DayAgenda({ monday, hours, open, bookings, busy, now, length }: 
           return (
             <li key={i}>
               <button type="button" className="wa-day" aria-pressed={i === chosen} onClick={() => setChosen(i)}>
-                {WEEKDAY_SHORT.format(day)}<b>{day.getDate()}</b><small>{plus(day, 1) <= now ? "Past" : count ? `${count} open` : hours[String(i + 1)] ? "Full" : "—"}</small>
+                {WEEKDAY_SHORT.format(day)}<b>{day.getDate()}</b><small>{plus(day, 1) <= now ? "Past" : count ? `${count} open` : hours[weekdayKey(day)] ? "Full" : "—"}</small>
               </button>
             </li>
           );

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { byDay, clockTime, gridBounds, HOUR_CHOICES, initials, localDay, mondayOf, zoneName } from "./booking";
+import { byDay, clockTime, gridBounds, HOUR_CHOICES, initials, localDay, mondayOf, rollingDays, weekdayKey, zoneName } from "./booking";
 
 const ZONE = "Europe/Bratislava";
 
@@ -24,6 +24,13 @@ describe("the week", () => {
     const monday = mondayOf(new Date(2026, 9, 22, 15, 30)); // a Thursday afternoon
     expect([monday.getFullYear(), monday.getMonth(), monday.getDate(), monday.getHours()]).toEqual([2026, 9, 19, 0]);
     expect(mondayOf(new Date(2026, 9, 25, 10)).getDate()).toBe(19); // Sunday belongs to the week before
+  });
+
+  it("uses a rolling today-plus-seven-days window with each day's saved hours", () => {
+    const days = rollingDays(new Date(2026, 10, 11)); // Wednesday
+    expect(days).toHaveLength(8);
+    expect(days.map((day) => day.getDate())).toEqual([11, 12, 13, 14, 15, 16, 17, 18]);
+    expect(days.map(weekdayKey)).toEqual(["3", "4", "5", "6", "7", "1", "2", "3"]);
   });
 
   it("is drawn from the earliest opening to the latest closing, at least 08:00 to 18:00", () => {

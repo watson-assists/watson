@@ -10,7 +10,7 @@ import { GOOGLE_CALENDAR } from "@/lib/features";
 import { Notice } from "@/components/status";
 import { DayAgenda, WeekGrid, WeekKeys } from "@/components/week-grid";
 import { FormTemplateSettings } from "@/components/form-template-settings";
-import { mondayOf, type Week } from "@/lib/booking";
+import type { Week } from "@/lib/booking";
 import { RequireSession } from "@/lib/session";
 import { call } from "@/lib/api";
 
@@ -22,7 +22,7 @@ export default function CalendarPage() {
   );
 }
 
-const WEEK_OF = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long" });
+const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long" });
 const plusDays = (date: Date, days: number) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
 
 /** Back from Google's consent screen, the edge function says how it went. */
@@ -34,18 +34,18 @@ const RETURN: Record<string, { tone: "neutral" | "failed"; title: string; text: 
 
 function Calendar() {
   const back = RETURN[useSearchParams().get("google") ?? ""];
-  const [monday, setMonday] = useState(() => mondayOf(new Date()));
+  const [start, setStart] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()));
   const [week, setWeek] = useState<Week | null>(null);
   const [failed, setFailed] = useState(false);
   const [now, setNow] = useState(() => new Date());
 
   const load = useCallback(() => {
-    call<Week>("calendar_week", { p_from: monday.toISOString(), p_to: plusDays(monday, 7).toISOString() }).then((answer) => {
+    call<Week>("calendar_week", { p_from: start.toISOString(), p_to: plusDays(start, 8).toISOString() }).then((answer) => {
       setNow(new Date());
       if (answer.ok) setWeek(answer);
       else setFailed(true);
     });
-  }, [monday]);
+  }, [start]);
   useEffect(load, [load]);
 
   if (failed) return <Notice tone="failed" title="Your calendar could not be loaded">Check your connection and reload the page.</Notice>;
@@ -53,23 +53,23 @@ function Calendar() {
 
   const hours = week.page?.hours ?? {};
   const length = week.page?.length_minutes ?? 45;
-  const parts = { monday, hours, open: week.open, bookings: week.bookings, busy: week.busy, now, length };
+  const parts = { start, hours, open: week.open, bookings: week.bookings, busy: week.busy, now, length };
   return (
     <>
       <div className="wa-pagehead">
         <div className="wa-pagehead__text">
           <h1 className="wa-title">Practice</h1>
           <p className="wa-meta">
-            Week of {WEEK_OF.format(monday)} · {week.open.length === 1 ? "one time" : `${week.open.length} times`} open for booking
+            {DAY.format(start)}–{DAY.format(plusDays(start, 7))} · {week.open.length === 1 ? "one time" : `${week.open.length} times`} open for booking
             · {week.bookings.length} booked
           </p>
         </div>
         <div className="wa-actions">
-          <button type="button" className="wa-button wa-button--secondary wa-button--small" aria-label="Previous week"
-            onClick={() => setMonday(plusDays(monday, -7))}><ChevronLeft aria-hidden className="wa-icon wa-icon--sm" /></button>
-          <button type="button" className="wa-button wa-button--secondary wa-button--small" onClick={() => setMonday(mondayOf(new Date()))}>This week</button>
-          <button type="button" className="wa-button wa-button--secondary wa-button--small" aria-label="Next week"
-            onClick={() => setMonday(plusDays(monday, 7))}><ChevronRight aria-hidden className="wa-icon wa-icon--sm" /></button>
+          <button type="button" className="wa-button wa-button--secondary wa-button--small" aria-label="Previous 8 days"
+            onClick={() => setStart(plusDays(start, -8))}><ChevronLeft aria-hidden className="wa-icon wa-icon--sm" /></button>
+          <button type="button" className="wa-button wa-button--secondary wa-button--small" onClick={() => setStart(new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()))}>Today</button>
+          <button type="button" className="wa-button wa-button--secondary wa-button--small" aria-label="Next 8 days"
+            onClick={() => setStart(plusDays(start, 8))}><ChevronRight aria-hidden className="wa-icon wa-icon--sm" /></button>
         </div>
       </div>
       {back && <Notice tone={back.tone} title={back.title}>{back.text}</Notice>}

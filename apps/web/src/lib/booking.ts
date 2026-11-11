@@ -53,6 +53,16 @@ export function mondayOf(date: Date): Date {
   return monday;
 }
 
+/** ISO weekday key used by the saved opening-hours map: Monday is "1". */
+export const weekdayKey = (date: Date) => String((date.getDay() + 6) % 7 + 1);
+
+/** A rolling window on local calendar days, starting at midnight. */
+export function rollingDays(start: Date, count = 8): Date[] {
+  const first = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  return Array.from({ length: count }, (_, index) =>
+    new Date(first.getFullYear(), first.getMonth(), first.getDate() + index));
+}
+
 /** The hours the week grid shows: from the earliest opening to the latest closing, at least 08 to 18. */
 export function gridBounds(hours: Hours): [number, number] {
   const spans = Object.values(hours).filter((span): span is [string, string] => Boolean(span));

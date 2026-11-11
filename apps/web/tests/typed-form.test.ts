@@ -56,6 +56,8 @@ describe("typed bilingual form processing", () => {
       p_language: "en",
       p_consent_recorded: true,
       p_form_template_version_id: versionId,
+      p_patient_name: "Jana Nováková",
+      p_patient_contact: "+421 905 111 222",
     });
     const consultationId = created.consultation_id as string;
     transcriptWithFormJob(consultationId);

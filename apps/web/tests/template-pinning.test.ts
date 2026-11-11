@@ -50,11 +50,20 @@ describe("pinned form-template processing", () => {
     const versionId = createdVersion.version_id as string;
     expect(createdVersion).toMatchObject({ ok: true, template_key: "custom", version_number: 1 });
 
+    expect(await rpc(owner.client, "create_consultation_with_template", {
+      p_scheduled_at: "2026-11-30T09:00:00Z",
+      p_language: "en",
+      p_consent_recorded: true,
+      p_form_template_version_id: versionId,
+    })).toMatchObject({ ok: false, error_category: "VALIDATION", field: "patient" });
+
     const made = await rpc(owner.client, "create_consultation_with_template", {
       p_scheduled_at: "2026-11-30T09:00:00Z",
       p_language: "en",
       p_consent_recorded: true,
       p_form_template_version_id: versionId,
+      p_patient_name: "Jana Nováková",
+      p_patient_contact: "+421 905 111 222",
     });
     const consultationId = made.consultation_id as string;
 

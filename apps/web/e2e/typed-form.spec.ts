@@ -33,7 +33,12 @@ test("practice and consultation selectors expose and pin the bilingual form", as
   await page.getByLabel("Date").fill("2026-12-03");
   await page.getByLabel("Time (24-hour)").fill("09:00");
   await page.getByRole("button", { name: "Create consultation" }).click();
-  await expect(page.getByRole("heading", { name: /SYN-/ })).toBeVisible();
+  await expect(page.getByText("Add the patient's name.")).toBeVisible();
+  await expect(page.getByText("Add their phone or email.")).toBeVisible();
+  await page.getByLabel("Patient's name").fill("Jana Nováková");
+  await page.getByLabel("Phone or email").fill("+421 905 111 222");
+  await page.getByRole("button", { name: "Create consultation" }).click();
+  await expect(page.getByRole("heading", { name: "Jana Nováková" })).toBeVisible();
   const consultationId = new URL(page.url()).searchParams.get("id");
   expect(consultationId).not.toBeNull();
   expect(sqlAsOwner(`
@@ -60,9 +65,11 @@ test("a completed bilingual massage form opens in typed review", async ({ page, 
   })).toMatchObject({ ok: true });
   const created = await rpc(practitioner, "create_consultation_with_template", {
     p_scheduled_at: "2026-12-02T09:00:00Z",
-    p_language: "en",
-    p_consent_recorded: true,
-    p_form_template_version_id: versionId,
+      p_language: "en",
+      p_consent_recorded: true,
+      p_form_template_version_id: versionId,
+      p_patient_name: "Jana Nováková",
+      p_patient_contact: "+421 905 111 222",
   });
   const consultationId = created.consultation_id as string;
   transcriptWithFormJob(consultationId);

@@ -10,7 +10,7 @@ import { z } from "@/lib/zod";
 import { AppShell } from "@/components/app-shell";
 import { FieldError, Notice } from "@/components/status";
 import { call, explain } from "@/lib/api";
-import { asClock, asDateInput, fromDateInputAndClock, fromDayAndClock } from "@/lib/dates";
+import { asClock, asDateInput, fromDateInputAndClock, fromDayAndClock, nextWeekday } from "@/lib/dates";
 import { feeSchema, fromCents, toCents } from "@/lib/fee";
 import { PAYMENTS } from "@/lib/features";
 import { defaultTemplateId, templateLabel } from "@/lib/form-templates";
@@ -26,15 +26,14 @@ const schema = z.object({
   consent_recorded: z.boolean(),
   scenario_notes: z.string().max(500, "Keep the notes under 500 characters."),
   fee: feeSchema,
-  // The patient (owner, 24 Oct): name and phone or email together, or neither (the patient gives them).
-  patient_name: z.string().max(120, "Keep the name under 120 characters."),
-  patient_contact: z.string().max(254, "Keep it under 254 characters."),
+  patient_name: z.string().trim().min(1, "Add the patient's name.").max(120, "Keep the name under 120 characters."),
+  patient_contact: z.string().trim().min(1, "Add their phone or email.").max(254, "Keep it under 254 characters."),
   form_template_version_id: z.string().uuid("Choose a consultation form."),
 }).superRefine((values, context) => {
-  const name = values.patient_name.trim();
   const contact = values.patient_contact.trim();
-  if (name && !contact) context.addIssue({ code: "custom", path: ["patient_contact"], message: "Add their phone (with its country code, like +421) or their email." });
-  if (contact && !name) context.addIssue({ code: "custom", path: ["patient_name"], message: "Add the patient's name too." });
+  if (contact && !/^\+?[0-9 ()-]+$/.test(contact) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) {
+    context.addIssue({ code: "custom", path: ["patient_contact"], message: "Add a phone (with country code, like +421) or email." });
+  }
 });
 type Values = z.infer<typeof schema>;
 
@@ -83,9 +82,9 @@ function NewConsultation() {
   }, [getValues, setValue]);
 
   useEffect(() => {
-    const now = new Date();
-    setValue("day", asDateInput(now));
-    setValue("clock", asClock(now));
+    const next = nextWeekday(new Date());
+    setValue("day", asDateInput(next));
+    setValue("clock", asClock(next));
   }, [setValue]);
 
   async function create(values: Values) {
@@ -101,6 +100,10 @@ function NewConsultation() {
       p_form_template_version_id: values.form_template_version_id,
     });
     if (outcome.ok) return router.push(`/consultation/?id=${outcome.consultation_id}`);
+    if (outcome.field === "patient") {
+      setError("patient_name", { message: "Add the patient's name." });
+      return setError("patient_contact", { message: "Add their phone or email." });
+    }
     if (outcome.field === "contact") return setError("patient_contact", { message: "That phone or email cannot be used. A phone needs its country code, like +421 905 123 456." });
     if (outcome.field === "name") return setError("patient_name", { message: "Write the patient's name, up to 120 characters." });
     setFailure(explain(outcome.error_category));
@@ -116,7 +119,7 @@ function NewConsultation() {
             <fieldset className="wa-form" style={{ border: 0, margin: 0, padding: 0 }}>
               <legend className="wa-label" style={{ marginBottom: 4 }}>Patient</legend>
               <p className="wa-hint" id="patient-hint" style={{ marginTop: -8 }}>
-                Start typing to choose someone you have seen before. Leave both empty to let the patient fill them in from their link.
+                Start typing to choose someone you have seen before. A name and phone number or email are required.
               </p>
               <div className="wa-fields-row">
                 <div className="wa-field">

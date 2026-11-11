@@ -10,6 +10,14 @@ export const asDateInput = (at: Date) => `${at.getFullYear()}-${pad(at.getMonth(
 /** "07:03". */
 export const asClock = (at: Date) => `${pad(at.getHours())}:${pad(at.getMinutes())}`;
 
+/** Tomorrow, unless that is Saturday or Sunday; the default may still be edited. */
+export function nextWeekday(from: Date): Date {
+  const day = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1);
+  if (day.getDay() === 6) day.setDate(day.getDate() + 2);
+  if (day.getDay() === 0) day.setDate(day.getDate() + 1);
+  return day;
+}
+
 /** The moment a day ("27/10/2026", also with dots or dashes) and a time ("14:30") name, in this browser's time zone; null if either is not real. */
 export function fromDayAndClock(day: string, clock: string): Date | null {
   const date = /^\s*(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})\s*$/.exec(day);
