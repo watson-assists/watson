@@ -114,7 +114,6 @@ declare
   v_user uuid := (select auth.uid());
   v_form public.forms;
   v_field jsonb;
-  v_gate jsonb;
 begin
   select f.* into v_form from public.forms f
   join public.consultations c on c.id = f.consultation_id
@@ -150,6 +149,7 @@ declare
   v_user uuid := (select auth.uid());
   v_form public.forms;
   v_field jsonb;
+  v_gate jsonb;
 begin
   select f.* into v_form from public.forms f
   join public.consultations c on c.id = f.consultation_id
