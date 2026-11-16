@@ -13,7 +13,7 @@ import { call, explain } from "@/lib/api";
 import { asClock, asDateInput, fromDateInputAndClock, fromDayAndClock, nextWeekday } from "@/lib/dates";
 import { feeSchema, fromCents, toCents } from "@/lib/fee";
 import { PAYMENTS } from "@/lib/features";
-import { defaultTemplateId, templateLabel } from "@/lib/form-templates";
+import { defaultTemplateId, forNewWork, templateLabel } from "@/lib/form-templates";
 import type { Tables } from "@/lib/database.types";
 import { RequireSession } from "@/lib/session";
 import { LANGUAGE_LABEL } from "@/lib/status";
@@ -75,7 +75,7 @@ function NewConsultation() {
         .order("is_built_in", { ascending: false }).order("template_key").order("version_number", { ascending: false }),
       supabase.from("form_template_defaults").select("form_template_version_id").maybeSingle(),
     ]).then(([available, current]) => {
-      const rows = available.data ?? [];
+      const rows = forNewWork(available.data ?? []);
       setTemplates(rows);
       setValue("form_template_version_id", defaultTemplateId(rows, current.data?.form_template_version_id));
     });

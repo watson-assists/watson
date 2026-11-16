@@ -16,5 +16,10 @@ export const templateLabel = (version: TemplateVersion) => {
   return `${templateName(version)} · v${version.version_number} · ${languages}`;
 };
 
+/** What a practitioner may choose for new work. An earlier copy (migration 20261108090000) only
+ *  keeps an old form tied to the definition it was made with. */
+export const forNewWork = <T extends TemplateVersion>(versions: T[]) =>
+  versions.filter((version) => version.template_key !== "legacy_earlier");
+
 export const defaultTemplateId = (versions: TemplateVersion[], configured?: string | null) =>
   configured ?? versions.find((version) => version.template_key === "watson_standard")?.id ?? versions[0]?.id ?? "";

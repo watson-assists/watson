@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultTemplateId, templateLabel } from "../lib/form-templates";
+import { defaultTemplateId, forNewWork, templateLabel } from "../lib/form-templates";
 
 const versions = [
   {
@@ -30,5 +30,10 @@ describe("form template selectors", () => {
   it("shows stable version and language metadata without raw JSON", () => {
     expect(templateLabel(versions[0])).toBe("Massage / Masáž · v1 · EN/SK");
     expect(templateLabel(versions[1])).toBe("Watson · v1 · EN");
+  });
+
+  it("offers no earlier copy for new work: those only keep old forms tied to what they were made with", () => {
+    const earlier = { id: "33333333-3333-4333-8333-333333333333", template_key: "legacy_earlier", version_number: 1, schema_version: 1, definition: { title: "Intake, as it was in October" } };
+    expect(forNewWork([...versions, earlier])).toEqual(versions);
   });
 });

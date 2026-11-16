@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { call, explain } from "@/lib/api";
 import type { Tables } from "@/lib/database.types";
 import { Notice } from "@/components/status";
-import { defaultTemplateId, templateLabel } from "@/lib/form-templates";
+import { defaultTemplateId, forNewWork, templateLabel } from "@/lib/form-templates";
 import { supabase } from "@/lib/supabase";
 
 type Version = Pick<Tables<"form_template_versions">,
@@ -27,7 +27,7 @@ export function FormTemplateSettings() {
       supabase.from("form_template_defaults").select("form_template_version_id").maybeSingle(),
     ]).then(([available, current]) => {
       if (!alive) return;
-      const rows = available.data ?? [];
+      const rows = forNewWork(available.data ?? []);
       const id = defaultTemplateId(rows, current.data?.form_template_version_id);
       setVersions(rows);
       setSelected(id);
