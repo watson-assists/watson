@@ -158,6 +158,8 @@ test("set a fee, send the patient's link; the patient sees the fee, then pays an
   await page.getByRole("link", { name: "New consultation" }).click();
   await page.getByLabel("Language spoken").selectOption("en");
   await page.getByLabel("Fee").fill("40");
+  await page.getByLabel("Patient's name").fill("Jana Nováková");
+  await page.getByLabel("Phone or email").fill(`+421 905 ${Math.floor(Math.random() * 9e5 + 1e5)}`);
   await page.getByRole("button", { name: "Create consultation" }).click();
   await expect(page.getByText("Fee €40.00")).toBeVisible();
   await expect(page.getByText("Not paid yet")).toBeVisible();

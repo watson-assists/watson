@@ -21,6 +21,8 @@ test("the usual fee starts each new consultation, 0 makes one free, and an unpai
     await page.goto("/consultations/new/");
     await expect(page.getByLabel("Fee")).toHaveValue("40.00");
     if (fee !== undefined) await page.getByLabel("Fee").fill(fee);
+    await page.getByLabel("Patient's name").fill("Jana Nováková");
+    await page.getByLabel("Phone or email").fill(`+421 905 ${Math.floor(Math.random() * 9e5 + 1e5)}`);
     await page.getByRole("button", { name: "Create consultation" }).click();
   }
 

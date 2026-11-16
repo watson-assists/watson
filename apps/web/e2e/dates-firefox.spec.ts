@@ -18,6 +18,8 @@ test("in an American browser, a consultation uses a date picker and a 24-hour cl
 
   await day.fill("2026-10-27");
   await time.fill("14:30");
+  await page.getByLabel("Patient's name").fill("Jana Nováková");
+  await page.getByLabel("Phone or email").fill(`+421 905 ${Math.floor(Math.random() * 9e5 + 1e5)}`);
   await page.getByRole("button", { name: "Create consultation" }).click();
   await expect(page.getByText("Tue 27 Oct 2026, 14:30")).toBeVisible();
   expect(problems).toEqual([]);

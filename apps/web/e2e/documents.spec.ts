@@ -10,6 +10,10 @@ test("a patient sends a document from their link, and the practitioner sees it",
   await signIn(page, account);
   await page.getByRole("link", { name: "New consultation" }).click();
   await page.getByLabel("Language spoken").selectOption("en");
+  // The practitioner names the patient (required since 11 Nov); the patient confirms the same number.
+  const number = `+421 9${String(Date.now()).slice(-8)}`;
+  await page.getByLabel("Patient's name").fill("Jana Nováková");
+  await page.getByLabel("Phone or email").fill(number);
   await page.getByRole("button", { name: "Create consultation" }).click();
   const link = await page.getByLabel("Link for the patient").inputValue();
   const consultation = page.url();
@@ -23,7 +27,6 @@ test("a patient sends a document from their link, and the practitioner sees it",
   await documents.getByLabel("Documents to send").setInputFiles(LAB_PHOTO);
   await expect(documents.getByText("Enter a phone number with its country code")).toBeVisible();
 
-  const number = `+421 9${String(Date.now()).slice(-8)}`;
   await documents.getByLabel("Phone or email").fill(number);
   await documents.getByLabel("Documents to send").setInputFiles(LAB_PHOTO);
   const sent = documents.getByRole("list", { name: "Documents you sent" });

@@ -2,18 +2,20 @@ import { expect, signIn, test } from "./account";
 import { attachTrack, browserClient, localStack, rpc, sqlAsOwner } from "../tests/local-stack";
 
 
-test("create a consultation, Watson numbers it, record consent; the video call is the only way to record", async ({ page, account, problems }) => {
+test("create a consultation for a named patient, record consent; the video call is the only way to record", async ({ page, account, problems }) => {
   await signIn(page, account);
 
-  // No reference to type (owner, 16 Oct, B): Watson numbers the consultation itself.
+  // No reference to type (owner, 16 Oct, B). The patient's name and phone or email are required
+  // (Prasanth, 11 Nov), so the consultation is known by the patient's name.
+  const name = `Jana Nováková-${Math.random().toString(36).slice(2, 6)}`;
   await page.getByRole("link", { name: "New consultation" }).first().click();
   await expect(page.getByLabel("Patient reference")).toHaveCount(0);
   await page.getByLabel("Notes").fill("sleep complaint, patient mentions a supplement");
   await page.getByLabel(/Consent to transcription is recorded/).uncheck();
+  await page.getByLabel("Patient's name").fill(name);
+  await page.getByLabel("Phone or email").fill(`+421 905 ${Math.floor(Math.random() * 9e5 + 1e5)}`);
   await page.getByRole("button", { name: "Create consultation" }).click();
-  const heading = page.getByRole("heading", { level: 1, name: /^SYN-\d{6}$/ });
-  await expect(heading).toBeVisible();
-  const reference = (await heading.textContent())!;
+  await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
 
   await expect(page.getByText("Not recorded yet", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Record consent" }).click();
@@ -32,10 +34,11 @@ test("create a consultation, Watson numbers it, record consent; the video call i
   await bookedTab.press("ArrowRight");
   await expect(paidTab).toHaveAttribute("aria-selected", "true");
   await bookedTab.click();
-  const row = page.getByRole("link", { name: new RegExp(reference) });
+  // The same name also leads the "next" line above the list; the row is the one that says what is next.
+  const row = page.getByRole("link", { name: new RegExp(name) }).filter({ hasText: "Start the call" });
   await expect(row).toContainText("Waiting for the call");
   await row.click();
-  await expect(page.getByRole("heading", { name: reference })).toBeVisible();
+  await expect(page.getByRole("heading", { name })).toBeVisible();
   expect(problems).toEqual([]);
 });
 
@@ -156,6 +159,8 @@ test("tabs separate completed work and archive it without deleting it", async ({
 test("the patient's link is short enough to read out, and opens the patient's page however it is typed", async ({ page, account, browser, problems }) => {
   await signIn(page, account);
   await page.getByRole("link", { name: "New consultation" }).first().click();
+  await page.getByLabel("Patient's name").fill("Jana Nováková");
+  await page.getByLabel("Phone or email").fill(`+421 905 ${Math.floor(Math.random() * 9e5 + 1e5)}`);
   await page.getByRole("button", { name: "Create consultation" }).click();
   const link = await page.getByLabel("Link for the patient").inputValue();
   expect(link).toMatch(/\/j\/[2-9A-HJ-NP-Z]{8}$/);

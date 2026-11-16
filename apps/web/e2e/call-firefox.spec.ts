@@ -8,6 +8,8 @@ test("a call recorded in Firefox is saved and goes to transcription", async ({ p
   await signIn(page, account);
   await page.getByRole("link", { name: "New consultation" }).first().click();
   await page.getByLabel("Language spoken").selectOption("en");
+  await page.getByLabel("Patient's name").fill("Jana Nováková");
+  await page.getByLabel("Phone or email").fill(`+421 905 ${Math.floor(Math.random() * 9e5 + 1e5)}`);
   await page.getByRole("button", { name: "Create consultation" }).click();
 
   await page.getByRole("link", { name: "Start video call" }).click();

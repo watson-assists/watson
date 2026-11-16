@@ -6,6 +6,8 @@ test("the patient's WhatsApp button opens the number given to their link, or the
   await signIn(page, account);
   await page.getByRole("link", { name: "New consultation" }).click();
   await page.getByLabel("Language spoken").selectOption("en");
+  await page.getByLabel("Patient's name").fill("Jana Nováková");
+  await page.getByLabel("Phone or email").fill(`+421 905 ${Math.floor(Math.random() * 9e5 + 1e5)}`);
   await page.getByRole("button", { name: "Create consultation" }).click();
   const link = await page.getByLabel("Link for the patient").inputValue();
   const button = (p: import("@playwright/test").Page) => p.getByRole("link", { name: "Message Watson on WhatsApp" });

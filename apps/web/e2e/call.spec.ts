@@ -5,6 +5,8 @@ test("a video call records both voices and starts transcription when it ends", a
   await signIn(page, account);
   await page.getByRole("link", { name: "New consultation" }).first().click();
   await page.getByLabel("Language spoken").selectOption("en");
+  await page.getByLabel("Patient's name").fill("Jana Nováková");
+  await page.getByLabel("Phone or email").fill(`+421 905 ${Math.floor(Math.random() * 9e5 + 1e5)}`);
   await page.getByRole("button", { name: "Create consultation" }).click();
 
   // The doctor starts the call and gets the link for the patient.
