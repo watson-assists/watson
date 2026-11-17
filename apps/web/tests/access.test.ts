@@ -89,11 +89,12 @@ describe("a signed-out visitor", () => {
     expect((await visitor.rpc("record_consent", { p_consultation_id: annas })).error).not.toBeNull();
   });
 
-  it("cannot get a session from signup before verifying the email", async () => {
+  // Updated with the owner's approval, 17 Nov: since SEC-03 sign-up is refused outright, here as on
+  // the hosted project (only a patient's anonymous call session may be created that way).
+  it("cannot sign up at all", async () => {
     const email = `unverified-${crypto.randomUUID()}@watson.test`;
     const { data, error } = await visitor.auth.signUp({ email, password: PASSWORD });
-    expect(error).toBeNull();
-    expect(data.user).not.toBeNull();
+    expect(error?.message).toMatch(/no public sign-up/);
     expect(data.session).toBeNull();
   });
 

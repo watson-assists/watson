@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { browserClient, localStack } from "./local-stack";
+import { adminClient, browserClient, localStack } from "./local-stack";
 
 const MAILPIT = "http://127.0.0.1:54324/api/v1";
 
@@ -8,8 +8,12 @@ describe("native Auth OTP does not grant patient access", () => {
     const stack = localStack();
     const client = browserClient(stack);
     const email = `patient-otp-${crypto.randomUUID()}@watson.test`;
+    // Updated with the owner's approval, 17 Nov: since SEC-03 a native code cannot create an account
+    // (sign-up is refused), so the same steps start from an account that already exists.
+    expect((await client.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })).error).not.toBeNull();
+    expect((await adminClient(stack).auth.admin.createUser({ email, email_confirm: true })).error).toBeNull();
 
-    const requested = await client.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+    const requested = await client.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
     expect(requested.error).toBeNull();
     expect(requested.data.session).toBeNull();
 

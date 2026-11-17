@@ -40,6 +40,8 @@ const MESSAGE: Record<string, string> = {
   FORM_JOB_ACTIVE: "Another form revision is already being prepared.",
   FORM_TEMPLATE_MISSING: "Your form is not set up yet, so there is nothing to fill in.",
   NOT_SIGNED_IN: "You are signed out. Sign in again.",
+  PAYMENT_REQUIRED: "Pay for the consultation first, then join the call.",
+  CALL_CLOSED: "This consultation's call has ended.",
   VALIDATION: "One of the values was not accepted. Check the form and try again.",
   STORAGE_UNAVAILABLE: "The service could not be reached. Check your connection and try again.",
   PATIENT_MISSING: "Add the patient's name and phone number or email first.",

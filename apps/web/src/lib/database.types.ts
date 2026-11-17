@@ -1520,6 +1520,7 @@ export type Database = {
         }
         Returns: Json
       }
+      admit_to_call: { Args: { p_token: string }; Returns: Json }
       approve_form: { Args: { p_form_id: string }; Returns: Json }
       archive_consultation: { Args: { p_consultation_id: string }; Returns: Json }
       book_time: {

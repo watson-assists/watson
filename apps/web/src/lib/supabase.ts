@@ -13,3 +13,13 @@ if (!url || !publishableKey) {
 }
 
 export const supabase = createClient<Database>(url, publishableKey);
+
+let callClient: typeof supabase | null = null;
+/**
+ * The patient's browser in a call (SEC-03, 17 Nov): an anonymous session of its own, kept apart from
+ * any practitioner signed in to the same browser, so one browser can still play both sides in a test.
+ */
+export function patientCallClient(): typeof supabase {
+  callClient ??= createClient<Database>(url!, publishableKey!, { auth: { storageKey: "watson-patient-call" } });
+  return callClient;
+}

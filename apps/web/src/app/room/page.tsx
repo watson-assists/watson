@@ -150,7 +150,7 @@ function Room({ userId }: { userId: string }) {
     const recording = recordCall(local, livePieceSender(userId, id));
     recorder.current = recording;
     session.current = connect({
-      token: invite, role: "doctor", local,
+      consultationId: id, token: invite, role: "doctor", local,
       onRemote: (remote) => {
         if (remoteVideo.current) remoteVideo.current.srcObject = remote;
         recording.addPatient(remote);

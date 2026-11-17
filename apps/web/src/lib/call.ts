@@ -1,8 +1,11 @@
-// A consultation call. Video and voice go directly between the two browsers (WebRTC); the
-// Supabase channel named by the invite token carries only the handshake. Free: no media server.
+// A consultation call. Video and voice go directly between the two browsers (WebRTC); two private
+// Supabase channels carry only the handshake, one for each direction. Free: no media server.
+// Who may use them is decided in the database (20261117100000_call_admission.sql, SEC-03): the
+// doctor as the consultation's practitioner, the patient's browser once admit_to_call admits it.
+import type { Outcome } from "./api";
 import { formatOfRecording, type AudioFormat } from "./audio";
 import { RELAY } from "./features";
-import { supabase } from "./supabase";
+import { patientCallClient, supabase } from "./supabase";
 
 type Role = "doctor" | "patient";
 export type CallState = "joining" | "waiting" | "connecting" | "connected" | "reconnecting" | "ended";
@@ -37,8 +40,22 @@ export function patientLink(shortCode: string): string {
   return `${window.location.origin}/j/${shortCode}`;
 }
 
+/**
+ * The patient's browser asks to join: it gets an anonymous session of its own, and the database
+ * admits it only to an open, paid consultation, one device at a time. The answer names the call.
+ */
+export async function admitToCall(token: string): Promise<Outcome<{ consultation_id: string }>> {
+  const client = patientCallClient();
+  const { data: { session } } = await client.auth.getSession();
+  if (!session && (await client.auth.signInAnonymously()).error) return { ok: false, error_category: "STORAGE_UNAVAILABLE" };
+  const { data, error } = await client.rpc("admit_to_call", { p_token: token });
+  if (error || data === null) return { ok: false, error_category: "STORAGE_UNAVAILABLE" };
+  return data as unknown as Outcome<{ consultation_id: string }>;
+}
+
 /** Joins the call as doctor or patient. The doctor makes every offer, so either can arrive first. */
-export function connect({ token, role, local, onRemote, onState }: {
+export function connect({ consultationId, token, role, local, onRemote, onState }: {
+  consultationId: string;
   token: string;
   role: Role;
   local: MediaStream;
@@ -52,9 +69,14 @@ export function connect({ token, role, local, onRemote, onState }: {
   let otherSession: string | null = null;
   let waiting: RTCIceCandidateInit[] = [];
   let queue = Promise.resolve();
-  const channel = supabase.channel(`call-${token}`, { config: { broadcast: { self: false } } });
+  // The doctor uses their own sign-in; the patient the call's anonymous session (admitToCall).
+  const client = role === "doctor" ? supabase : patientCallClient();
+  // Each side listens on the channel addressed to it and sends on the other's; the database lets
+  // only the doctor send to the patient and only the admitted patient send to the doctor.
+  const inbox = client.channel(`call:${consultationId}:to-${role}`, { config: { private: true } });
+  const outbox = client.channel(`call:${consultationId}:to-${other}`, { config: { private: true } });
   const send = (message: Message) =>
-    channel.send({ type: "broadcast", event: "signal", payload: { ...message, from: role, session } });
+    outbox.send({ type: "broadcast", event: "signal", payload: { ...message, from: role, session } });
   // One message at a time, in order: a handshake step must finish before the next starts.
   const inTurn = (step: () => Promise<void>) => {
     queue = queue.then(step).catch(() => onState("reconnecting"));
@@ -129,13 +151,19 @@ export function connect({ token, role, local, onRemote, onState }: {
     }
   }
 
-  channel.on("broadcast", { event: "signal" }, ({ payload }) => inTurn(() => handle(payload as Signal)));
+  inbox.on("broadcast", { event: "signal" }, ({ payload }) => inTurn(() => handle(payload as Signal)));
   onState("joining");
-  channel.subscribe((status) => {
-    if (status === "SUBSCRIBED") {
+  let joined = 0;
+  const ready = (status: string) => {
+    if (status === "SUBSCRIBED" && ++joined === 2) {
       onState("waiting");
       void send({ kind: "hello" });
     }
+  };
+  // Private channels carry the signed-in session's token, so it is handed over before joining.
+  void client.realtime.setAuth().then(() => {
+    inbox.subscribe(ready);
+    outbox.subscribe(ready);
   });
 
   return {
@@ -143,7 +171,7 @@ export function connect({ token, role, local, onRemote, onState }: {
       await send({ kind: "bye" });
       peer?.close();
       peer = null;
-      await supabase.removeChannel(channel);
+      await Promise.all([client.removeChannel(inbox), client.removeChannel(outbox)]);
       onState("ended");
     },
   };

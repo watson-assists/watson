@@ -7,8 +7,8 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { PatientDocuments, type SentDocument } from "@/components/patient-documents";
 import { euros } from "@/lib/fee";
 import { Notice } from "@/components/status";
-import { call } from "@/lib/api";
-import { connect, type CallState } from "@/lib/call";
+import { call, explain } from "@/lib/api";
+import { admitToCall, connect, type CallState } from "@/lib/call";
 import { payment } from "@/lib/payment";
 import { dateTime } from "@/lib/status";
 
@@ -98,6 +98,8 @@ function Join() {
 
   async function join() {
     setProblem(null);
+    const admitted = await admitToCall(token);
+    if (!admitted.ok) return setProblem(explain(admitted.error_category));
     let local: MediaStream;
     try {
       local = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
@@ -107,7 +109,7 @@ function Join() {
     media.current = local;
     if (localVideo.current) localVideo.current.srcObject = local;
     session.current = connect({
-      token, role: "patient", local,
+      consultationId: admitted.consultation_id, token, role: "patient", local,
       onRemote: (remote) => {
         if (remoteVideo.current) remoteVideo.current.srcObject = remote;
       },

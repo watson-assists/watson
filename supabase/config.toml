@@ -172,10 +172,12 @@ enable_refresh_token_rotation = true
 # Allows refresh tokens to be reused after expiry, up to the specified interval in seconds.
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
-# Allow/disallow new user signups to your project.
+# Allow/disallow new user signups to your project. On only so that a patient's browser can get an
+# anonymous call session; the before_user_created hook below refuses every other sign-up.
 enable_signup = true
-# Allow/disallow anonymous sign-ins to your project.
-enable_anonymous_sign_ins = false
+# Allow/disallow anonymous sign-ins to your project. On: a patient's browser joins a call with an
+# anonymous session that the database admits (SEC-03, 17 Nov 2026); it reaches nothing else.
+enable_anonymous_sign_ins = true
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
@@ -284,9 +286,10 @@ max_frequency = "5s"
 # inactivity_timeout = "8h"
 
 # This hook runs before a new user is created and allows developers to reject the request based on the incoming user object.
-# [auth.hook.before_user_created]
-# enabled = true
-# uri = "pg-functions://postgres/auth/before-user-created-hook"
+# Watson: refuses every sign-up except a patient's anonymous call session (SEC-03, 17 Nov 2026).
+[auth.hook.before_user_created]
+enabled = true
+uri = "pg-functions://postgres/public/hook_before_user_created"
 
 # This hook runs before a token is issued and allows you to add additional claims based on the authentication method used.
 # [auth.hook.custom_access_token]
