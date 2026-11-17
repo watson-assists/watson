@@ -217,6 +217,18 @@ def _outcome(cara: tuple[str, str, Client], consultation_id: str) -> dict[str, A
     }
 
 
+def _on_to_its_form(practitioner: tuple[str, str, Client], consultation_id: str) -> bool:
+    """Since every consultation pins a form version (20261108083404), a delivered transcript goes
+    straight on to its form: the consultation waits for the form and its job is queued. Updated
+    from "transcript_ready" with the owner's approval, 17 Nov."""
+    jobs = _data(
+        practitioner[2].table("form_jobs").select("status").eq("consultation_id", consultation_id)
+    )
+    return _status(practitioner, consultation_id) == "extraction_processing" and jobs == [
+        {"status": "queued"}
+    ]
+
+
 def test_a_full_job_delivers_a_transcript_and_logs_no_text(
     engine: Engine,
     cara: tuple[str, str, Client],
@@ -228,7 +240,7 @@ def test_a_full_job_delivers_a_transcript_and_logs_no_text(
     assert engine.run_once()
 
     outcome = _outcome(cara, consultation_id)
-    assert outcome["status"] == "transcript_ready"
+    assert _on_to_its_form(cara, consultation_id)
     assert {s["speaker"] for s in outcome["segments"]} == {"practitioner", "patient"}
     text = " ".join(s["machine_text"] for s in outcome["segments"]).lower()
     assert "sleep" in text
@@ -245,7 +257,7 @@ def test_digital_silence_gives_an_empty_transcript(
     consultation_id = _queue(cara, SILENCE, SILENCE)
     assert engine.run_once()
     outcome = _outcome(cara, consultation_id)
-    assert outcome["status"] == "transcript_ready"
+    assert _on_to_its_form(cara, consultation_id)
     assert outcome["segments"] == []
 
 
@@ -255,7 +267,7 @@ def test_room_noise_is_flagged_never_passed_off_as_speech(
     consultation_id = _queue(cara, ROOM_NOISE, ROOM_NOISE)
     assert engine.run_once()
     outcome = _outcome(cara, consultation_id)
-    assert outcome["status"] == "transcript_ready"
+    assert _on_to_its_form(cara, consultation_id)
     for segment in outcome["segments"]:
         assert segment["possibly_not_speech"] or (segment["confidence"] or 0) < 0.5, segment
 

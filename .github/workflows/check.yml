@@ -1,7 +1,8 @@
 # Every push runs the same checks as `pnpm check` locally: lint, types and tests for the web app,
 # the engine and the edge functions, then the database and browser tests against a local Supabase.
 # Free: the repository is public. Not here: the browser test that runs the real transcription
-# engine (it needs a speech model); run it locally with `pnpm --filter web e2e` before a deploy.
+# engine (it needs the large speech model); run it locally with `pnpm --filter web e2e` before a deploy.
+# The engine's own integration tests do run here, with the tiny model.
 name: Checks
 on:
   push:
@@ -52,6 +53,19 @@ jobs:
       - name: Database tests
         working-directory: apps/web
         run: node scripts/use-local-stack.mjs && pnpm exec vitest run tests
+      # The engine against this database with the smallest speech model, so its integration tests
+      # run on every push (13 of them failed unseen from 29 Oct to 17 Nov while they were skipped).
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/cache@v4
+        with:
+          path: ~/.local/share/watson/models/faster-whisper-tiny
+          key: faster-whisper-tiny-v1
+      - name: Engine integration tests
+        working-directory: apps/clinical-worker
+        run: |
+          uv sync --frozen
+          [ -d ~/.local/share/watson/models/faster-whisper-tiny ] || WATSON_MODEL=tiny uv run clinical-worker fetch-model
+          uv run pytest -q tests/test_integration.py
       - name: Browser tests
         working-directory: apps/web
         run: |
