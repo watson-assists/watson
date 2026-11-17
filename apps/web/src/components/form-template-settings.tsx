@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { call, explain } from "@/lib/api";
 import type { Tables } from "@/lib/database.types";
 import { Notice } from "@/components/status";
-import { defaultTemplateId, forNewWork, templateLabel } from "@/lib/form-templates";
-import { supabase } from "@/lib/supabase";
+import { formChoices } from "@/lib/form-choices";
+import { templateLabel } from "@/lib/form-templates";
 
 type Version = Pick<Tables<"form_template_versions">,
   "id" | "template_key" | "version_number" | "schema_version" | "definition">;
@@ -20,15 +20,8 @@ export function FormTemplateSettings() {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([
-      supabase.from("form_template_versions")
-        .select("id, template_key, version_number, schema_version, definition")
-        .order("is_built_in", { ascending: false }).order("template_key").order("version_number", { ascending: false }),
-      supabase.from("form_template_defaults").select("form_template_version_id").maybeSingle(),
-    ]).then(([available, current]) => {
+    formChoices().then(({ versions: rows, chosen: id }) => {
       if (!alive) return;
-      const rows = forNewWork(available.data ?? []);
-      const id = defaultTemplateId(rows, current.data?.form_template_version_id);
       setVersions(rows);
       setSelected(id);
       setSaved(id);

@@ -13,7 +13,8 @@ import { call, explain } from "@/lib/api";
 import { asClock, asDateInput, fromDateInputAndClock, fromDayAndClock, nextWeekday } from "@/lib/dates";
 import { feeSchema, fromCents, toCents } from "@/lib/fee";
 import { PAYMENTS } from "@/lib/features";
-import { defaultTemplateId, forNewWork, templateLabel } from "@/lib/form-templates";
+import { formChoices } from "@/lib/form-choices";
+import { templateLabel } from "@/lib/form-templates";
 import type { Tables } from "@/lib/database.types";
 import { RequireSession } from "@/lib/session";
 import { LANGUAGE_LABEL } from "@/lib/status";
@@ -69,15 +70,9 @@ function NewConsultation() {
     if (PAYMENTS) supabase.from("practitioner_profiles").select("fee_cents").maybeSingle().then(({ data }) => {
       if (data?.fee_cents && !getValues("fee")) setValue("fee", fromCents(data.fee_cents));
     });
-    Promise.all([
-      supabase.from("form_template_versions")
-        .select("id, template_key, version_number, schema_version, definition")
-        .order("is_built_in", { ascending: false }).order("template_key").order("version_number", { ascending: false }),
-      supabase.from("form_template_defaults").select("form_template_version_id").maybeSingle(),
-    ]).then(([available, current]) => {
-      const rows = forNewWork(available.data ?? []);
-      setTemplates(rows);
-      setValue("form_template_version_id", defaultTemplateId(rows, current.data?.form_template_version_id));
+    formChoices().then(({ versions, chosen }) => {
+      setTemplates(versions);
+      setValue("form_template_version_id", chosen);
     });
   }, [getValues, setValue]);
 
