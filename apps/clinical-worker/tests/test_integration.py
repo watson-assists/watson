@@ -86,12 +86,23 @@ def _admin() -> Client:
     return _client(STACK["secret"])
 
 
-def _account(label: str) -> tuple[str, str, Client]:
+def _account(label: str, practitioner: bool = True) -> tuple[str, str, Client]:
     assert STACK is not None
     email = f"{label}-{uuid.uuid4().hex[:8]}@watson.test"
     created = _admin().auth.admin.create_user(
         {"email": email, "password": PASSWORD, "email_confirm": True}
     )
+    # Since SEC-02 (29 Oct) a practitioner is one by role, as in apps/web/tests/local-stack.ts.
+    if practitioner:
+        subprocess.run(
+            ["docker", "exec", "-i", "supabase_db_watson", "psql", "-U", "postgres", "-q"],
+            # The id is a UUID that Supabase Auth just returned, not outside input.
+            input="insert into private.user_roles (user_id, role)"  # noqa: S608
+            f" values ('{created.user.id}', 'practitioner');",
+            text=True,
+            check=True,
+            capture_output=True,
+        )
     client = _client(STACK["public"])
     client.auth.sign_in_with_password({"email": email, "password": PASSWORD})
     return created.user.id, email, client
@@ -100,7 +111,7 @@ def _account(label: str) -> tuple[str, str, Client]:
 @pytest.fixture(scope="module")
 def engine() -> Engine:
     assert STACK is not None
-    user_id, email, _ = _account("engine")
+    user_id, email, _ = _account("engine", practitioner=False)
     _admin().rpc("register_engine", {"p_user_id": user_id, "p_label": "pytest"}).execute()
     return Engine(
         Settings(
@@ -551,6 +562,28 @@ def test_a_live_piece_becomes_text_for_the_call_screen_and_is_removed(
     assert len(rows[0]["text"].split()) >= 3
     with pytest.raises(StorageException):  # removed once read
         _admin().storage.from_("audio").download(path)
+
+
+def test_a_live_piece_never_waits_for_the_form_model(
+    engine: Engine, cara: tuple[str, str, Client], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 17 Nov: a form fill after each ten-second piece held the next pieces back for minutes, on the
+    # laptop and on Modal alike. The call screen's words come first; form work runs elsewhere.
+    _no_live_pieces()
+    asked: list[bool] = []
+
+    def refuse() -> None:
+        asked.append(True)
+        raise AssertionError("the form model was asked during a call")
+
+    monkeypatch.setattr(engine, "_load_form_model", refuse)
+    consultation_id, _ = _live_piece(cara, SPEECH)
+    assert engine.run_once()
+    assert asked == []
+    rows = _data(
+        cara[2].table("live_pieces").select("status").eq("consultation_id", consultation_id)
+    )
+    assert rows == [{"status": "done"}]
 
 
 def test_the_speech_model_is_told_the_names_and_spellings_of_the_consultation(

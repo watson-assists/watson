@@ -20,7 +20,7 @@ from .audio import audio_duration_seconds
 from .config import AUDIO_FORMATS, Settings
 from .documents import Reader
 from .errors import ErrorCategory, Stopped, WorkerError
-from .form import Cancelled, Line, LlamaModel, Template, coverage, document_lines, fill
+from .form import Cancelled, Line, LlamaModel, Template, document_lines, fill
 from .log import log_event
 from .merge import merge
 from .schema import Speaker, Track, Transcript, TranscriptionModel
@@ -255,26 +255,11 @@ class Engine:
                     path, piece["language"], self.settings, lambda: False, hints=hints
                 )
             text = " ".join(s.text for s in heard.segments if not s.possibly_not_speech)
-            result = self.main.rpc("engine_live_piece_done", {"p_id": piece["id"], "p_text": text})
-            if (
-                result.get("ok")
-                and text
-                and piece.get("provisional_enabled")
-                and piece.get("template")
-            ):
-                try:
-                    keys = coverage(
-                        self._load_form_model(),
-                        Template.model_validate(piece["template"]),
-                        Line(0, piece["speaker"], text),
-                        piece.get("language") or "",
-                    )
-                    self.main.rpc(
-                        "engine_record_provisional_coverage",
-                        {"p_piece_id": piece["id"], "p_field_keys": keys},
-                    )
-                except Exception as exc:
-                    log_event("provisional_coverage.failed", exception_type=type(exc).__name__)
+            self.main.rpc("engine_live_piece_done", {"p_id": piece["id"], "p_text": text})
+            # ponytail: no form work here (17 Nov). A form fill per ten-second piece held the next
+            # pieces back for minutes. Live coverage (form.coverage and
+            # engine_record_provisional_coverage) waits for its own worker, as
+            # plans/structured-massage-forms.md step 6 says.
         except Exception as exc:
             log_event("live_piece.failed", exception_type=type(exc).__name__)
             self.main.rpc("engine_live_piece_failed", {"p_id": piece["id"]})
