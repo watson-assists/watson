@@ -183,6 +183,9 @@ function Details({ practitioner: page, time }: { practitioner: PublicPage; time:
     if (!outcome.ok) {
       setBusy(false);
       if (outcome.error_category === "TIME_TAKEN") return setProblem({ message: "Someone booked this time a moment ago. Choose another one." });
+      if (outcome.error_category === "BOOKING_LIMIT") {
+        return setProblem({ message: "Online booking is full for today. Contact the practice to book a time." });
+      }
       if (outcome.error_category === "TOO_MANY_BOOKINGS") {
         return setProblem({ message: "You already have three upcoming times with this practitioner. Ask them directly if you need another." });
       }
