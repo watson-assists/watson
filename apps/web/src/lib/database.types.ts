@@ -878,6 +878,7 @@ export type Database = {
           heard_text: string | null
           id: string
           offset_seconds: number
+          read_at: string | null
           seq: number
           speaker: Database["public"]["Enums"]["speaker"]
           status: string
@@ -894,6 +895,7 @@ export type Database = {
           heard_text?: string | null
           id?: string
           offset_seconds: number
+          read_at?: string | null
           seq: number
           speaker: Database["public"]["Enums"]["speaker"]
           status?: string
@@ -909,6 +911,7 @@ export type Database = {
           heard_text?: string | null
           id?: string
           offset_seconds?: number
+          read_at?: string | null
           seq?: number
           speaker?: Database["public"]["Enums"]["speaker"]
           status?: string

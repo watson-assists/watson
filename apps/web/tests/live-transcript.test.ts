@@ -50,6 +50,16 @@ describe("a live piece", () => {
     expect(data).toEqual([{ speaker: "patient", seq: 0, offset_seconds: 0.4, text: "Budím sa o tretej.", status: "done" }]);
   });
 
+  it("records when its words were written, so the live delay can be measured (17 Nov)", async () => {
+    const id = await consultation();
+    await send(id, "practitioner", 0, 0);
+    const piece = await claim(id);
+    expect(await rpc(engine.client, "engine_live_piece_done", { p_id: piece!.id, p_text: "Ako spávate?" })).toEqual({ ok: true });
+    const { data } = await eva.client.from("live_pieces").select("created_at, claimed_at, read_at").eq("id", piece!.id).single();
+    expect(data!.read_at).not.toBeNull();
+    expect(Date.parse(data!.read_at!)).toBeGreaterThanOrEqual(Date.parse(data!.claimed_at!));
+  });
+
   it("is refused without consent, for another doctor's consultation, and from anyone but the doctor", async () => {
     const pending = await consultation(false);
     expect((await send(pending, "practitioner", 0, 0)).added).toMatchObject({ ok: false });
