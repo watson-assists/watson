@@ -103,11 +103,11 @@ function Room({ userId }: { userId: string }) {
     return true;
   }
 
-  // The live transcript: what the engine has written so far, every three seconds while the call runs.
+  // The live transcript: what the engine has written so far, every second while the call runs.
   const called = state !== null;
   useEffect(() => {
     if (!called) return;
-    const poll = setInterval(() => void liveLines(id).then(setLines), 3000);
+    const poll = setInterval(() => void liveLines(id).then(setLines), 1000); // 17 Nov: was 3 s
     return () => clearInterval(poll);
   }, [called, id]);
   useEffect(() => {

@@ -5,6 +5,7 @@
 import type { Outcome } from "./api";
 import { formatOfRecording, type AudioFormat } from "./audio";
 import { RELAY } from "./features";
+import { loudness, PIECE, pieceEnds } from "./piece";
 import { patientCallClient, supabase } from "./supabase";
 
 type Role = "doctor" | "patient";
@@ -181,37 +182,60 @@ export type Recording = { practitioner: Blob; patient: Blob; format: AudioFormat
 
 /** One live piece of the call: a voice, its number in turn, and when it starts in the recording. */
 export type LivePiece = (speaker: "practitioner" | "patient", blob: Blob, seq: number, offsetSeconds: number) => void;
-const PIECE_MS = 10_000;
-
 /**
- * Ten-second pieces of one voice, each a file of its own, for the live transcript (owner, 24 Oct:
- * "like it happens in Teams"). Recorded beside the full track, which stays the one that counts.
+ * Pieces of one voice, each a file of its own, for the live transcript (owner, 24 Oct: "like it
+ * happens in Teams"). Recorded beside the full track, which stays the one that counts. A piece ends
+ * at a pause or at ten seconds (piece.ts); one with no sound at all is not sent.
  */
 function pieces(stream: MediaStream, startedAt: number, onPiece: (blob: Blob, seq: number, offset: number) => void) {
+  const context = new AudioContext();
+  context.resume().catch(() => {});
+  const analyser = context.createAnalyser();
+  analyser.fftSize = 2048;
+  context.createMediaStreamSource(stream).connect(analyser); // listened to, never played
+  const samples = new Float32Array(analyser.fftSize);
   let count = 0;
-  let current: MediaRecorder | null = null;
-  let timer: ReturnType<typeof setTimeout> | undefined;
   let running = true;
+  let piece: { recorder: MediaRecorder; began: number; lastSound: number; heard: boolean } | null = null;
   const next = () => {
     if (!running) return;
     const recorder = new MediaRecorder(stream, { audioBitsPerSecond: 32_000 });
     const parts: Blob[] = [];
-    const seq = count++;
     const offset = (performance.now() - startedAt) / 1000;
+    const current = { recorder, began: performance.now(), lastSound: 0, heard: false };
     recorder.addEventListener("dataavailable", (event) => parts.push(event.data));
-    recorder.addEventListener("stop", () => onPiece(new Blob(parts, { type: recorder.mimeType }), seq, offset), { once: true });
+    recorder.addEventListener("stop", () => {
+      if (current.heard) onPiece(new Blob(parts, { type: recorder.mimeType }), count++, offset);
+    }, { once: true });
     recorder.start();
-    current = recorder;
-    timer = setTimeout(() => {
-      recorder.stop();
-      next();
-    }, PIECE_MS);
+    piece = current;
   };
+  const listen = setInterval(() => {
+    if (!piece) return;
+    const now = performance.now();
+    // A browser that keeps the meter suspended cannot tell sound from silence: every piece then
+    // counts as sound and runs its full ten seconds, as before 17 Nov.
+    if (context.state !== "running") {
+      piece.heard = true;
+      piece.lastSound = now;
+    } else {
+      analyser.getFloatTimeDomainData(samples);
+      if (loudness(samples) >= PIECE.speech) {
+        piece.heard = true;
+        piece.lastSound = now;
+      }
+    }
+    if (pieceEnds(now - piece.began, piece.heard ? now - piece.lastSound : now - piece.began, piece.heard)) {
+      piece.recorder.stop();
+      next();
+    }
+  }, 100);
   next();
   return () => {
     running = false;
-    clearTimeout(timer);
-    if (current?.state === "recording") current.stop();
+    clearInterval(listen);
+    if (piece?.recorder.state === "recording") piece.recorder.stop();
+    void context.close();
   };
 }
 
