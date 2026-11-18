@@ -453,6 +453,38 @@ class TestOnDemand:
         assert answers == []
         assert clock.now == 300
 
+    def test_during_a_call_it_looks_again_every_second(self) -> None:
+        # 17 Nov: the 10-second nap between live pieces was about half of the live transcript's
+        # delay. While a call sends pieces, the engine looks again after a second; a minute after
+        # the last piece it naps as before.
+        from clinical_worker.engine import on_demand
+
+        clock = self.Clock()
+        steps: list[float] = []
+        last_live = [-1000.0]
+        piece = [True]  # one live piece, read at once
+
+        def step() -> bool:
+            steps.append(clock.now)
+            if piece:
+                piece.pop()
+                last_live[0] = clock.now
+                return True
+            return False
+
+        on_demand(
+            step,
+            finish=lambda: True,
+            idle_seconds=150,
+            poll_seconds=10,
+            clock=clock,
+            sleep=clock.sleep,
+            quick=lambda: clock.now - last_live[0] < 60,
+        )
+        assert steps[1:4] == [0, 1, 2]
+        gaps = {b - a for a, b in zip(steps, steps[1:], strict=False)}
+        assert gaps == {0, 1, 10}
+
     def test_the_idle_time_outlasts_a_lost_job_lease(self) -> None:
         # A job whose engine vanished is claimable again after two minutes; an engine started again
         # by Modal must still be there to claim it.

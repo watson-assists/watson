@@ -144,6 +144,12 @@ class Heartbeat(threading.Thread):
         self._finished.set()
 
 
+# During a call the engine looks for the next live piece this often (17 Nov: the usual 10-second
+# nap was about half of the live transcript's delay), until a minute after the last piece.
+LIVE_POLL_SECONDS = 1.0
+LIVE_CALL_SECONDS = 60.0
+
+
 def on_demand(
     step: Callable[[], bool],
     finish: Callable[[], bool],
@@ -151,16 +157,18 @@ def on_demand(
     poll_seconds: float,
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
+    quick: Callable[[], bool] = lambda: False,
 ) -> None:
     """An engine started on demand (decision 0009): works until nothing has come for `idle_seconds`,
-    then stops, unless `finish` says work arrived just as it was stopping."""
+    then stops, unless `finish` says work arrived just as it was stopping. While `quick` says a
+    call is sending live pieces, it looks again after a second instead of `poll_seconds`."""
     while True:
         last_work = clock()
         while clock() - last_work < idle_seconds:
             if step():
                 last_work = clock()
             else:
-                sleep(poll_seconds)
+                sleep(LIVE_POLL_SECONDS if quick() else poll_seconds)
         if finish():
             return
 
@@ -174,6 +182,11 @@ class Engine:
         )  # a second session, so a long download never delays a heartbeat
         self.form_model: LlamaModel | None = None  # loaded at the first form job
         self.reader = Reader(settings.ocr_model_dir)  # OCR models load at the first scan
+        self.last_live = -LIVE_CALL_SECONDS  # when the last live piece was read (monotonic)
+
+    def in_call(self) -> bool:
+        """Whether a call is sending live pieces: one was read within the last minute."""
+        return time.monotonic() - self.last_live < LIVE_CALL_SECONDS
 
     def run_forever(self) -> None:
         log_event(
@@ -184,7 +197,7 @@ class Engine:
         )
         while True:
             if not self._step():
-                time.sleep(self.settings.poll_seconds)
+                time.sleep(LIVE_POLL_SECONDS if self.in_call() else self.settings.poll_seconds)
 
     def run_on_demand(self) -> None:
         """In the cloud: started when work waits, stopped when there is none (decision 0009)."""
@@ -197,6 +210,7 @@ class Engine:
             lambda: bool(self.main.rpc("engine_run_finished", {"p_run_id": run_id}).get("ok")),
             self.settings.idle_seconds,
             self.settings.poll_seconds,
+            quick=self.in_call,
         )
         log_event("engine.stopped_on_demand")
 
@@ -244,6 +258,7 @@ class Engine:
     def process_live_piece(self, piece: dict[str, Any]) -> None:
         """Ten seconds of one voice during the call: its text for the call screen (owner, 24 Oct).
         The piece is removed either way; the transcript after the call uses the full recordings."""
+        self.last_live = time.monotonic()
         try:
             data = self.main.download(piece["storage_path"])
             self.settings.work_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
