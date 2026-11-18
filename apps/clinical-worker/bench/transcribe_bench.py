@@ -16,28 +16,47 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from clinical_worker.config import Settings  # noqa: E402
 from clinical_worker.transcribe import transcribe_track  # noqa: E402
 
+# The scripts spell numbers out; the model may write digits. Both count as the same word, in the
+# call's own language (18 Nov: Slovak "šesť" written "6" was scored as English "six").
 NUMBERS = {
-    "0": "zero",
-    "1": "one",
-    "2": "two",
-    "3": "three",
-    "4": "four",
-    "5": "five",
-    "6": "six",
-    "7": "seven",
-    "8": "eight",
-    "9": "nine",
-    "10": "ten",
-    "11": "eleven",
-    "19": "nineteen",
-    "21": "twenty-one",
-    "28": "twenty-eight",
-    "42": "forty-two",
+    "en": {
+        "0": "zero",
+        "1": "one",
+        "2": "two",
+        "3": "three",
+        "4": "four",
+        "5": "five",
+        "6": "six",
+        "7": "seven",
+        "8": "eight",
+        "9": "nine",
+        "10": "ten",
+        "11": "eleven",
+        "19": "nineteen",
+        "21": "twenty-one",
+        "28": "twenty-eight",
+        "42": "forty-two",
+    },
+    "sk": {
+        "0": "nula",
+        "1": "jeden",
+        "2": "dva",
+        "3": "tri",
+        "4": "štyri",
+        "5": "päť",
+        "6": "šesť",
+        "7": "sedem",
+        "8": "osem",
+        "9": "deväť",
+        "10": "desať",
+        "35": "tridsaťpäť",
+    },
 }
 
 
-def words(text: str) -> list[str]:
-    text = re.sub(r"\d+", lambda m: NUMBERS.get(m.group(), m.group()), text.lower())
+def words(text: str, language: str = "en") -> list[str]:
+    numbers = NUMBERS.get(language, {})
+    text = re.sub(r"\d+", lambda m: numbers.get(m.group(), m.group()), text.lower())
     return re.findall(r"[^\W_]+(?:'[^\W_]+)?", text.replace("-", " "))
 
 
@@ -76,8 +95,8 @@ def main() -> None:
             result = transcribe_track(squeezed, language, settings, lambda: False)
             seconds = time.monotonic() - started
             heard = " ".join(s.text for s in result.segments)
-            ref = words(script[speaker])
-            rate = wer(ref, words(heard))
+            ref = words(script[speaker], language)
+            rate = wer(ref, words(heard, language))
             total["seconds"] += seconds
             total["audio"] += result.duration_seconds
             total["errors"] += rate * len(ref)
