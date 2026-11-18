@@ -7,6 +7,7 @@ a correct answer contains (and must not contain). Invented data only (spec 5.1).
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from clinical_worker.form import Line, LlamaModel, Template, fill  # noqa: E402
@@ -14,19 +15,11 @@ from clinical_worker.form import Line, LlamaModel, Template, fill  # noqa: E402
 FIXTURES = Path(__file__).resolve().parents[3] / "packages" / "test-fixtures"
 
 
-def main() -> None:
-    model_path = Path(sys.argv[1])
-    case = json.loads(
-        Path(
-            sys.argv[2] if len(sys.argv) > 2 else FIXTURES / "consultations/ayurveda-en.json"
-        ).read_text()
-    )
-    template = Template.model_validate_json(
-        (FIXTURES / "templates/ayurveda-intake.json").read_text()
-    )
-    lines = [Line(i, speaker, text) for i, (speaker, text) in enumerate(case["turns"])]
-    model = LlamaModel(model_path)
-    answers = fill(model, template, lines, case["language"])
+def score(
+    case: dict[str, Any], lines: list[Line], answers: list[Any], show: bool = True
+) -> dict[str, int]:
+    """How many of the form's answers are right against the invented consultation's expectations.
+    Shared with bench/exam.py, which scores answers filled from what Watson heard."""
     by_line = {line.position: line.text.lower() for line in lines}
     score = {"right": 0, "fields": 0, "words": 0, "words_found": 0, "invented": 0, "bad_quotes": 0}
     for answer in answers:
@@ -56,14 +49,33 @@ def main() -> None:
                 + ("" if quote_ok else ", quote misses")
             )
         score["right"] += ok
-        print(f"{'ok ' if ok else 'XX '} {answer.key:20} {note:32} {answer.evidence} {answer.text}")
+        if show:
+            mark = "ok " if ok else "XX "
+            print(f"{mark} {answer.key:20} {note:32} {answer.evidence} {answer.text}")
+    return score
+
+
+def main() -> None:
+    model_path = Path(sys.argv[1])
+    case = json.loads(
+        Path(
+            sys.argv[2] if len(sys.argv) > 2 else FIXTURES / "consultations/ayurveda-en.json"
+        ).read_text()
+    )
+    template = Template.model_validate_json(
+        (FIXTURES / "templates/ayurveda-intake.json").read_text()
+    )
+    lines = [Line(i, speaker, text) for i, (speaker, text) in enumerate(case["turns"])]
+    model = LlamaModel(model_path)
+    answers = fill(model, template, lines, case["language"])
+    score_ = score(case, lines, answers)
     print(
         json.dumps(
             {
                 "model": model_path.name,
                 "seconds": model.last_seconds,
                 "usage": model.last_usage,
-                **score,
+                **score_,
             }
         )
     )
