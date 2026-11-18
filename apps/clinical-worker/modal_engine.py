@@ -4,14 +4,17 @@ The same engine as on the laptop, with the laptop's exact libraries (uv.lock), o
 processors, and only while work waits. After Synculariti's modal/modal_llm.py and its cost safety.
 
 - `wake`: the address the database knocks on, with a shared secret, when a transcript, a document
-  or a form is queued (migration 20261016150000). It starts `drain`.
+  or a form is queued (migration 20261016150000). It starts `drain`; for a live piece of a call in
+  progress it starts `live` (migration 20261118100000).
 - `drain`: `clinical-worker drain`: works until nothing has come for a while, then stops. The
   database refuses the stop while work waits, so nothing is left behind.
+- `live`: `clinical-worker live`: reads only live pieces, so the words on the doctor's screen never
+  wait behind a transcript, a document or a form; it stops a minute after the last piece.
 - `fetch_models`: fills the models volume once, from Hugging Face. The engine reads models from
   disk only.
 
 Cost safety, as Synculariti's: the database's monthly allowance of running time, Modal's workspace
-budget, and Modal's credit. One container at a time, an hour at most.
+budget, and Modal's credit. One container of each worker at a time, an hour at most.
 
 Set up and deploy with scripts/configure-cloud-engine.sh (Modal profile `watson`, never
 Synculariti's).
@@ -71,6 +74,22 @@ def drain() -> None:
     _clinical_worker("drain")
 
 
+# The speech model only: no form model, no OCR, so half the memory.
+@app.function(
+    image=image,
+    region=REGION,
+    cpu=4.0,
+    memory=4096,
+    timeout=60 * 60,
+    max_containers=1,
+    retries=2,
+    volumes={MODELS: models},
+    secrets=[engine_secret],
+)
+def live() -> None:
+    _clinical_worker("live")
+
+
 @app.function(
     image=image, region=REGION, timeout=30 * 60, volumes={MODELS: models}, secrets=[engine_secret]
 )
@@ -89,17 +108,20 @@ def wake():  # type: ignore[no-untyped-def]
     import hmac
     import os
 
-    from fastapi import FastAPI, Header, HTTPException
+    from fastapi import Body, FastAPI, Header, HTTPException
 
     web = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
     @web.post("/")
-    def knock(authorization: str = Header(default="")) -> dict[str, bool]:
+    def knock(
+        authorization: str = Header(default=""),
+        live_piece: bool = Body(False, embed=True, alias="live"),
+    ) -> dict[str, bool]:
         # An open door to the engine would be somebody else's free computing.
         expected = f"Bearer {os.environ['WAKE_SECRET']}".encode()
         if not hmac.compare_digest(authorization.encode(), expected):
             raise HTTPException(status_code=403)
-        drain.spawn()
+        (live if live_piece else drain).spawn()
         return {"ok": True}
 
     return web

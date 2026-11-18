@@ -196,35 +196,35 @@ class Engine:
             compute_type=self.settings.compute_type,
         )
         while True:
-            if not self._step():
+            if not self._step(self.run_once):
                 time.sleep(LIVE_POLL_SECONDS if self.in_call() else self.settings.poll_seconds)
 
-    def run_on_demand(self) -> None:
-        """In the cloud: started when work waits, stopped when there is none (decision 0009)."""
-        run_id = self.main.rpc("engine_run_started", {})["run_id"]
+    def run_on_demand(self, live: bool = False) -> None:
+        """In the cloud: started when work waits, stopped when there is none (decision 0009).
+        `live` is the live worker (18 Nov): live pieces only, stopping a minute after the last."""
+        run_id = self.main.rpc("engine_run_started", {"p_live": live})["run_id"]
         log_event(
             "engine.started_on_demand", model=self.settings.model, device=self.settings.device
         )
         on_demand(
-            self._step,
+            lambda: self._step(self.run_live_once if live else self.run_once),
             lambda: bool(self.main.rpc("engine_run_finished", {"p_run_id": run_id}).get("ok")),
-            self.settings.idle_seconds,
-            self.settings.poll_seconds,
+            LIVE_CALL_SECONDS if live else self.settings.idle_seconds,
+            LIVE_POLL_SECONDS if live else self.settings.poll_seconds,
             quick=self.in_call,
         )
         log_event("engine.stopped_on_demand")
 
-    def _step(self) -> bool:
+    def _step(self, once: Callable[[], bool]) -> bool:
         """One job, if there is one. A failure is logged and counts as nothing done."""
         try:
-            return self.run_once()
+            return once()
         except Exception as exc:
             log_event("engine.poll_failed", exception_type=type(exc).__name__)
             return False
 
-    def run_once(self) -> bool:
-        """Claims and processes one job. False when there was nothing to do."""
-        # A piece of the call in progress first: the practitioner is watching for its text.
+    def run_live_once(self) -> bool:
+        """Claims and reads one piece of a call in progress. False when none waits."""
         answer = self.main.rpc("engine_claim_live_piece", {})
         if not answer.get("ok"):
             raise RuntimeError(str(answer.get("error_category")))
@@ -232,6 +232,13 @@ class Engine:
             self._remove_live_file(path)
         if answer.get("piece"):
             self.process_live_piece(answer["piece"])
+            return True
+        return False
+
+    def run_once(self) -> bool:
+        """Claims and processes one job. False when there was nothing to do."""
+        # A piece of the call in progress first: the practitioner is watching for its text.
+        if self.run_live_once():
             return True
         answer = self.main.rpc("engine_claim_job", {})
         if not answer.get("ok"):
@@ -273,7 +280,7 @@ class Engine:
             self.main.rpc("engine_live_piece_done", {"p_id": piece["id"], "p_text": text})
             # ponytail: no form work here (17 Nov). A form fill per ten-second piece held the next
             # pieces back for minutes. Live coverage (form.coverage and
-            # engine_record_provisional_coverage) waits for its own worker, as
+            # engine_record_provisional_coverage) can join the live worker (18 Nov) later, as
             # plans/structured-massage-forms.md step 6 says.
         except Exception as exc:
             log_event("live_piece.failed", exception_type=type(exc).__name__)

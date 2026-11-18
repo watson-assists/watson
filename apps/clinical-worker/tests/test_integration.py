@@ -677,3 +677,37 @@ def test_a_live_piece_of_an_ended_call_is_removed_unread(
     assert piece == [{"status": "failed", "text": None}]
     with pytest.raises(StorageException):  # its file is gone too
         _admin().storage.from_("audio").download(path)
+
+
+def test_the_live_worker_reads_live_pieces_only_in_a_run_of_its_own(
+    engine: Engine, cara: tuple[str, str, Client], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 18 Nov: during a call the words never wait behind a transcript, a document or a form. The
+    # live worker reads live pieces and nothing else, and its run counts in the same allowance.
+    _no_live_pieces()
+    queued = _queue(cara, SPEECH, SPEECH)
+    consultation_id, _ = _live_piece(cara, SILENCE)
+    seen: list[bool] = []
+
+    def once(step: Any, finish: Any, idle_seconds: float, poll_seconds: float, **_: Any) -> None:
+        seen.extend([step(), step(), finish()])  # the piece; then nothing, the transcript waits
+        assert (idle_seconds, poll_seconds) == (60, 1)
+
+    monkeypatch.setattr("clinical_worker.engine.on_demand", once)
+    engine.run_on_demand(live=True)
+    assert seen == [True, False, True]
+    piece = _data(
+        cara[2].table("live_pieces").select("status").eq("consultation_id", consultation_id)
+    )
+    assert piece == [{"status": "done"}]
+    job = _data(cara[2].table("transcription_jobs").select("status").eq("consultation_id", queued))
+    assert job == [{"status": "queued"}]
+    runs = subprocess.run(
+        ["docker", "exec", "-i", "supabase_db_watson", "psql", "-U", "postgres", "-qtA"],
+        input="select live, finished_at is not null from public.engine_runs"
+        " order by started_at desc limit 1;",
+        text=True,
+        check=True,
+        capture_output=True,
+    ).stdout.split()
+    assert runs == ["t|t"]
