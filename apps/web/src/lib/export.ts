@@ -85,6 +85,28 @@ export const answerText = (answer: FormAnswer | undefined, field?: FormField,
   return answer.practitioner_text ?? answer.machine_text ?? "";
 };
 
+const number = (text: string) => {
+  const found = /\d+(?:[.,]\d+)?/.exec(text);
+  return found ? Number(found[0].replace(",", ".")) : NaN;
+};
+
+/**
+ * The body mass index from height and weight as they were said ("172 cm" or "1,72 m"; "68 kg"), to one
+ * decimal (owner's test team, 23 Nov). Null when either is missing, not plausible, or in feet or pounds.
+ */
+export function bmi(height: string | null | undefined, weight: string | null | undefined): string | null {
+  if (!height || !weight || /ft|feet|foot|'|lb|pound/i.test(`${height} ${weight}`)) return null;
+  const kilograms = number(weight);
+  let metres = number(height);
+  if (metres > 3) metres /= 100; // said in centimetres
+  if (!(metres >= 1 && metres <= 2.5 && kilograms >= 20 && kilograms <= 300)) return null;
+  return (kilograms / metres ** 2).toFixed(1);
+}
+
+/** The BMI from a form's height and weight answers, as the practitioner left them. */
+export const formBmi = (answers: ReadonlyMap<string, FormAnswer>) =>
+  bmi(answerText(answers.get("height")), answerText(answers.get("weight")));
+
 /** "Approved 27/10/2026 11:30", "Draft, not yet approved" or "No form yet". */
 export const formState = (record: ConsultationRecord) =>
   !record.template ? "No form yet" : record.approvedAt ? `Approved ${when(record.approvedAt)}` : "Draft, not yet approved";
@@ -109,7 +131,11 @@ export function formRows(record: ConsultationRecord): string[][] {
       `${signature.signed_name} · ${signature.method.replaceAll("_", " ")} · ${signature.signed_at}`,
     ]),
     ...(record.template?.sections ?? []).flatMap((section) =>
-      section.fields.map((field) => [section.title, field.label, answerText(answers.get(field.key), field)])),
+      section.fields.flatMap((field) => {
+        const row = [section.title, field.label, answerText(answers.get(field.key), field)];
+        const index = field.key === "weight" ? formBmi(answers) : null;
+        return index ? [row, [section.title, "BMI", index]] : [row];
+      })),
   ];
 }
 

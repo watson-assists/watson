@@ -20,8 +20,10 @@ describe("Watson's consultation form", () => {
     expect(await rpc(eva.client, "use_watson_form")).toEqual({ ok: true });
     const form = (await mine(eva))!;
     expect(form.title).toBe("Ayurvedic consultation");
+    // In the order of the doctor's own sheet since 23 Nov (owner's test team: "make the order to fit this form").
     expect(form.sections.map((s) => s.title)).toEqual([
-      "About the patient", "Reason for the visit", "Health history", "Daily life", "Assessment", "Plan", "For you only",
+      "About the patient", "Questionnaire", "Health history", "Present condition",
+      "Assessment", "Recommendation", "General instructions", "For you only",
     ]);
     const fields = form.sections.flatMap((s) => s.fields);
     expect(fields.find((f) => f.key === "medicines")?.label).toBe("Medicines and supplements");

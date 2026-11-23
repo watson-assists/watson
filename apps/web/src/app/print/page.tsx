@@ -8,7 +8,7 @@ import { AppShell } from "@/components/app-shell";
 import { Notice } from "@/components/status";
 import { isId } from "@/lib/api";
 import { asClock, asDayMonthYear } from "@/lib/dates";
-import { answerText, formState, translated, type ConsultationRecord, type OutputLanguage } from "@/lib/export";
+import { answerText, formBmi, formState, translated, type ConsultationRecord, type OutputLanguage } from "@/lib/export";
 import { loadRecords } from "@/lib/records";
 import { RequireSession } from "@/lib/session";
 
@@ -78,6 +78,7 @@ function PrintView() {
 function Printed({ record, language }: { record: ConsultationRecord; language: OutputLanguage }) {
   const at = new Date(record.scheduledAt);
   const answers = new Map(record.answers.map((answer) => [answer.field_key, answer]));
+  const index = formBmi(answers);
   return (
     <article className="wa-printed">
       <header className="wa-printed__head">
@@ -102,6 +103,7 @@ function Printed({ record, language }: { record: ConsultationRecord; language: O
                 <dd>{answerText(answers.get(field.key), field, language) || "—"}</dd>
               </div>
             ))}
+            {index && section.fields.some((field) => field.key === "weight") && <div><dt>BMI</dt><dd>{index}</dd></div>}
           </dl>
         </section>
       )) : <p className="wa-text">Watson has not filled in a form for this consultation yet.</p>}

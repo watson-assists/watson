@@ -12,7 +12,7 @@ import { DocumentViewer } from "@/components/document-viewer";
 import { openDocument, showsInPage, type Viewable } from "@/lib/documents";
 import { downloadConsultation } from "@/lib/download";
 import type { Tables } from "@/lib/database.types";
-import { isTypedFormTemplate } from "@/lib/export";
+import { formBmi, isTypedFormTemplate } from "@/lib/export";
 import { loadRecords } from "@/lib/records";
 import { RequireSession } from "@/lib/session";
 import { dateTime } from "@/lib/status";
@@ -159,6 +159,7 @@ function FormView() {
   if (loaded === null) return <p className="wa-meta" role="status">Loading the form…</p>;
 
   const { consultation, patientName, form, answers, segments, documents, late } = loaded;
+  const index = formBmi(new Map(answers.map((answer) => [answer.field_key, answer])));
   const template = form.template as unknown as Template;
   if (isTypedFormTemplate(template)) {
     return <TypedFormView loaded={loaded} template={template} reload={load} back={back} />;
@@ -256,6 +257,7 @@ function FormView() {
           <>
             {(!own || text) && <p className="wa-answer__text">{empty ? "Not discussed in the conversation." : text}</p>}
             {own && <p className="wa-hint">Only you see this. Watson does not fill it in, and it is never shared.</p>}
+            {answer.field_key === "weight" && index && <p className="wa-hint">BMI {index}, worked out from height and weight</p>}
           </>
         )}
         {field?.mode === "suggest" && !empty && answer.review === "unreviewed" && (

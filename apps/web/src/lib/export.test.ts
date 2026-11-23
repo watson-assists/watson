@@ -1,7 +1,7 @@
 // What a practitioner takes out of Watson (owner, 24 Oct: PDF or Excel, one patient or all of them).
 // The form in its own order with the answers as the practitioner left them; never the conversation (owner, 23 Nov).
 import { describe, expect, it } from "vitest";
-import { allPatientsRows, answerText, formRows, isTypedFormTemplate, type ConsultationRecord } from "./export";
+import { allPatientsRows, answerText, bmi, formRows, isTypedFormTemplate, type ConsultationRecord } from "./export";
 
 const template = { title: "Ayurvedic consultation", sections: [
   { title: "About the patient", fields: [{ key: "age", label: "Age" }, { key: "work", label: "Work" }] },
@@ -83,5 +83,20 @@ describe("all patients, taken out at once", () => {
       ["Jana Nováková", "+421905111222", "27/10/2026 10:00", "Dr. Robin Raju", "Approved 27/10/2026 11:30", "42", "Teacher, evening classes", "", "Call back in a week"],
       ["Ema Mráz", "ema@example.com", "20/10/2026 09:00", "Dr. Robin Raju", "No form yet", "", "", "", ""],
     ]);
+  });
+});
+
+describe("the BMI, from height and weight as they were said", () => {
+  it("works in centimetres or metres, with a decimal point or comma", () => {
+    expect(bmi("172 cm", "68 kg")).toBe("23.0");
+    expect(bmi("1,72 m", "68,5")).toBe("23.2");
+    expect(bmi("Výška 165", "Váha 59 kg")).toBe("21.7");
+  });
+  it("is left out when either is missing, not plausible, or in other units", () => {
+    expect(bmi("", "68 kg")).toBeNull();
+    expect(bmi("172 cm", null)).toBeNull();
+    expect(bmi("5 ft 8", "150 lb")).toBeNull();
+    expect(bmi("about average", "68 kg")).toBeNull();
+    expect(bmi("17 cm", "68 kg")).toBeNull();
   });
 });

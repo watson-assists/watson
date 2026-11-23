@@ -96,6 +96,30 @@ test("one consultation is printed, or saved as PDF, from a clean page with one P
   expect(problems).toEqual([]);
 });
 
+// Owner's test team, 23 Nov: "add height and weight". Watson works out the BMI from what was said.
+test("height and weight give the BMI, on the form, on paper and in Excel", async ({ page, account, problems }) => {
+  const id = await filledIn(account, "Eva Malá");
+  sqlAsOwner(`
+    update public.form_answers a
+      set machine_text = case a.field_key when 'height' then '172 cm' else '68 kg' end,
+          machine_value = to_jsonb(case a.field_key when 'height' then '172 cm' else '68 kg' end),
+          answer_state = 'known', machine_state = 'known'
+      from public.forms f
+      where f.id = a.form_id and f.consultation_id = '${id}' and a.field_key in ('height', 'weight');`);
+  await signIn(page, account);
+  await page.goto(`/form/?id=${id}`);
+  await expect(page.getByRole("article").filter({ hasText: "Weight" }).getByText("BMI 23.0")).toBeVisible();
+  const saving = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download as Excel" }).click();
+  const book = sheets(await (await saving).path());
+  expect(book["xl/worksheets/sheet1.xml"]).toContain("BMI");
+  expect(book["xl/worksheets/sheet1.xml"]).toContain("23.0");
+  await page.getByRole("link", { name: "Print or save as PDF" }).click();
+  await expect(page.getByText("BMI", { exact: true })).toBeVisible();
+  await expect(page.getByText("23.0", { exact: true })).toBeVisible();
+  expect(problems).toEqual([]);
+});
+
 test("all patients are taken out at once as Excel, one row each", async ({ page, account, problems }) => {
   await filledIn(account, "Peter Adamec");
   await signIn(page, account);
