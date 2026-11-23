@@ -1,14 +1,17 @@
 // The patient answers for themselves before joining (owner's test team, 23 Nov: "the patient does not
 // get a consent screen which is necessary before joining the call"). Agreeing on their link is their
 // consent; a call they declined goes ahead and nothing of it is kept, whatever the doctor's browser sends.
-import { beforeAll, describe, expect, it } from "vitest";
-import { attachTrack, browserClient, localStack, newPractitioner, rpc, type Practitioner } from "./local-stack";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { attachTrack, browserClient, localStack, newPractitioner, rpc, sqlAsOwner, type Practitioner } from "./local-stack";
 
 const stack = localStack();
 let eva: Practitioner;
 beforeAll(async () => {
   eva = await newPractitioner(stack, "consent-eva");
 });
+// The pieces these tests send are not audio: none may be left waiting for the engine tests that follow.
+afterAll(() => sqlAsOwner(`update public.live_pieces set status = 'failed' where status = 'waiting'
+  and consultation_id in (select id from public.consultations where practitioner_id = '${eva.id}');`));
 
 /** A consultation, with or without the doctor's own record of consent, and the patient's link. */
 async function consultation(doctorRecordedConsent: boolean) {
