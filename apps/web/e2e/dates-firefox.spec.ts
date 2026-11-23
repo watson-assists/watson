@@ -3,18 +3,17 @@ import { expect, signIn, test } from "./account";
 
 test.use({ locale: "en-US" });
 
-test("in an American browser, a consultation uses a date picker and a 24-hour clock", async ({ page, account, problems }) => {
+test("in an American browser, a new consultation starts today and now, with a date and a time picker", async ({ page, account, problems }) => {
   await signIn(page, account);
   await page.getByRole("link", { name: "New consultation" }).first().click();
   const day = page.getByLabel("Date");
   const time = page.getByLabel("Time");
   await expect(day).toHaveAttribute("type", "date");
-  await expect(day).toHaveValue(/^\d{4}-\d{2}-\d{2}$/); // today
-  await expect(time).toHaveValue(/^([01]\d|2[0-3]):[0-5]\d$/); // now
-
-  await time.fill("2:30 PM");
-  await page.getByRole("button", { name: "Create consultation" }).click();
-  await expect(page.getByText("Write the time on the 24-hour clock, like 14:30.")).toBeVisible();
+  await expect(time).toHaveAttribute("type", "time");
+  const now = new Date();
+  await expect(day).toHaveValue(now.toLocaleDateString("sv")); // today, as YYYY-MM-DD
+  const [hours, minutes] = (await time.inputValue()).split(":").map(Number);
+  expect(Math.abs(hours * 60 + minutes - (now.getHours() * 60 + now.getMinutes()))).toBeLessThanOrEqual(2); // now
 
   await day.fill("2026-10-27");
   await time.fill("14:30");

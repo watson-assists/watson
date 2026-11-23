@@ -31,7 +31,7 @@ test("practice and consultation selectors expose and pin the bilingual form", as
   await expect(consultationForm).toHaveValue(selectedVersion);
   await expect(consultationForm).toContainText(/Ayurvedic health & massage therapy assessment.*v1.*EN\/SK/);
   await page.getByLabel("Date").fill("2026-12-03");
-  await page.getByLabel("Time (24-hour)").fill("09:00");
+  await page.getByLabel("Time", { exact: true }).fill("09:00");
   await page.getByRole("button", { name: "Create consultation" }).click();
   await expect(page.getByText("Add the patient's name.")).toBeVisible();
   await expect(page.getByText("Add their phone or email.")).toBeVisible();

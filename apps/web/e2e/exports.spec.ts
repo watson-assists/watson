@@ -64,7 +64,7 @@ async function filledIn(account: { email: string; password: string }, name: stri
   return id;
 }
 
-test("one consultation is taken out as Excel, with the form in order and the conversation", async ({ page, account, problems }) => {
+test("one consultation is taken out as Excel, with the form in order and never the conversation", async ({ page, account, problems }) => {
   const id = await filledIn(account, "Jana Nováková");
   await signIn(page, account);
   await page.goto(`/form/?id=${id}`);
@@ -75,7 +75,9 @@ test("one consultation is taken out as Excel, with the form in order and the con
   const book = sheets(await file.path());
   expect(book["xl/worksheets/sheet1.xml"]).toContain("Wakes at three every night");
   expect(book["xl/worksheets/sheet1.xml"]).toContain("Medicines and supplements");
-  expect(book["xl/worksheets/sheet2.xml"]).toContain("I wake at three every night.");
+  // Owner, 23 Nov: what is downloaded is the form; the conversation stays in Watson.
+  expect(book["xl/worksheets/sheet2.xml"]).toBeUndefined();
+  expect(book["xl/worksheets/sheet1.xml"]).not.toContain("I wake at three every night.");
   expect(problems).toEqual([]);
 });
 
@@ -87,7 +89,7 @@ test("one consultation is printed, or saved as PDF, from a clean page with one P
   await expect(page.getByRole("heading", { name: "Ema Mráz", level: 1 })).toBeVisible();
   await expect(page.getByText("Wakes at three every night")).toBeVisible();
   await expect(page.getByText("Private notes")).toBeVisible();
-  await expect(page.getByText("I wake at three every night.").first()).toBeVisible();
+  await expect(page.getByText("I wake at three every night.")).toHaveCount(0); // owner, 23 Nov
   await page.evaluate(() => { window.print = () => { document.body.dataset.printed = "yes"; }; });
   await page.getByRole("button", { name: "Print or save as PDF" }).click();
   await expect(page.locator("body")).toHaveAttribute("data-printed", "yes");

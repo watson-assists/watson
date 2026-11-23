@@ -8,7 +8,7 @@ import { AppShell } from "@/components/app-shell";
 import { Notice } from "@/components/status";
 import { isId } from "@/lib/api";
 import { asClock, asDayMonthYear } from "@/lib/dates";
-import { answerText, conversationRows, formState, translated, type ConsultationRecord, type OutputLanguage } from "@/lib/export";
+import { answerText, formState, translated, type ConsultationRecord, type OutputLanguage } from "@/lib/export";
 import { loadRecords } from "@/lib/records";
 import { RequireSession } from "@/lib/session";
 
@@ -70,17 +70,14 @@ function PrintView() {
         </div>
       </div>
       {records.length === 0 && <p className="wa-text">No consultations yet.</p>}
-      {records.map((record, index) => <Printed key={index} record={record} withConversation={!all} language={language} />)}
+      {records.map((record, index) => <Printed key={index} record={record} language={language} />)}
     </>
   );
 }
 
-function Printed({ record, withConversation, language }: {
-  record: ConsultationRecord; withConversation: boolean; language: OutputLanguage;
-}) {
+function Printed({ record, language }: { record: ConsultationRecord; language: OutputLanguage }) {
   const at = new Date(record.scheduledAt);
   const answers = new Map(record.answers.map((answer) => [answer.field_key, answer]));
-  const conversation = conversationRows(record).slice(1);
   return (
     <article className="wa-printed">
       <header className="wa-printed__head">
@@ -117,16 +114,6 @@ function Printed({ record, withConversation, language }: {
       )) : <footer className="wa-printed__sign">
         <span>Practitioner signature / Podpis poskytovateľa</span><span className="wa-printed__line" /><span>{record.practitioner}</span>
       </footer>}
-      {withConversation && conversation.length > 0 && (
-        <section className="wa-printed__section wa-printed__conversation">
-          <h2 className="wa-heading">The conversation</h2>
-          <ol>
-            {conversation.map(([time, who, words], index) => (
-              <li key={index}><span className="wa-printed__who">{time} · {who}</span> {words}</li>
-            ))}
-          </ol>
-        </section>
-      )}
     </article>
   );
 }

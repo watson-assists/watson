@@ -6,7 +6,8 @@ import { Notice } from "@/components/status";
 import { call, explain, FIELD_MESSAGE } from "@/lib/api";
 import type { Tables } from "@/lib/database.types";
 import type { Person } from "@/lib/patient";
-import { DOCUMENT_ACCEPT, openDocument, sendDocument } from "@/lib/documents";
+import { DocumentViewer } from "@/components/document-viewer";
+import { DOCUMENT_ACCEPT, openDocument, sendDocument, showsInPage } from "@/lib/documents";
 import { dateTime, dayMonth } from "@/lib/status";
 import { supabase } from "@/lib/supabase";
 
@@ -124,8 +125,11 @@ export function DocumentsPanel({ consultationId, patient, person, onChanged }: {
     load();
   }
 
+  const [viewing, setViewing] = useState<Document | null>(null);
+  const notOpened = () => setProblem("The document could not be opened. Try again.");
   async function open(document: Document) {
-    if (!(await openDocument(document.storage_path))) setProblem("The document could not be opened. Try again.");
+    if (showsInPage(document.media_type)) return setViewing(document);
+    if (!(await openDocument(document.storage_path))) notOpened();
   }
 
   const error = (field: string) => fieldError?.field === field ? fieldError.message : null;
@@ -234,6 +238,7 @@ export function DocumentsPanel({ consultationId, patient, person, onChanged }: {
         <p className="wa-text">No documents yet. The patient can send them from their link.</p>
       )}
       {problem && <Notice tone="failed" title="That did not work">{problem}</Notice>}
+      <DocumentViewer document={viewing} onClose={() => setViewing(null)} onFailed={() => { setViewing(null); notOpened(); }} />
       {documents && documents.length > 0 && (
         <p className="wa-hint">Watson uses what it reads when it fills in your form, and shows the page each answer comes from. Only you can open these documents.</p>
       )}

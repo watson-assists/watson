@@ -39,7 +39,13 @@ test("a patient sends a document from their link, and the practitioner sees it",
   await expect(panel.getByText("lab-report-sk.jpg")).toBeVisible();
   await expect(panel.getByText(/^sent by the patient /)).toBeVisible();
   await expect(panel.getByText("1 sent by the patient")).toBeVisible();
-  await expect(panel.getByRole("button", { name: "Open lab-report-sk.jpg" })).toBeVisible();
+  // Owner, 23 Nov: a document opens over the page, in the same window, and closes back to it.
+  await panel.getByRole("button", { name: "Open lab-report-sk.jpg" }).click();
+  const viewer = page.getByRole("dialog", { name: "lab-report-sk.jpg" });
+  await expect(viewer.getByRole("img", { name: "lab-report-sk.jpg" })).toBeVisible();
+  expect(page.context().pages()).toHaveLength(1);
+  await viewer.getByRole("button", { name: "Close" }).click();
+  await expect(viewer).toBeHidden();
 
   await sent.getByRole("button", { name: "Remove lab-report-sk.jpg" }).click();
   await expect(sent.getByText("Removal pending")).toBeVisible();

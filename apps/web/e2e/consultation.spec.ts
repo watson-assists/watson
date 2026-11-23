@@ -66,6 +66,24 @@ test("a consultation that is not yours looks the same as one that does not exist
   await expect(page.getByText("This consultation does not exist, or it is not yours.")).toBeVisible();
 });
 
+test("a completed consultation opens from anywhere on its row, not only its name", async ({ page, account, problems }) => {
+  test.skip(Boolean(process.env.E2E_BASE_URL), "marks a local consultation approved directly");
+  const client = browserClient(localStack());
+  await client.auth.signInWithPassword({ email: account.email, password: account.password });
+  const made = await rpc(client, "create_consultation", {
+    p_synthetic_patient_ref: "SYN-0711", p_scheduled_at: new Date().toISOString(), p_language: "de", p_consent_recorded: true,
+  });
+  sqlAsOwner(`update public.consultations set status = 'approved' where id = '${made.consultation_id}';`);
+
+  await signIn(page, account);
+  await page.goto("/consultations/");
+  await page.getByRole("tab", { name: /Completed/ }).click();
+  const row = page.getByRole("listitem").filter({ hasText: "SYN-0711" });
+  await row.click({ position: { x: 8, y: 8 } }); // the row's corner, away from the name
+  await expect(page).toHaveURL(new RegExp(`/consultation/\\?id=${made.consultation_id}`));
+  expect(problems).toEqual([]);
+});
+
 test("a doctor can archive an unfinished consultation from its screen", async ({ page, account, problems }) => {
   const client = browserClient(localStack());
   await client.auth.signInWithPassword({ email: account.email, password: account.password });

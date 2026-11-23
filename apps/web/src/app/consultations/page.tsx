@@ -302,6 +302,7 @@ function Dashboard() {
                 <ul className="wa-done-list">
                   {done.map((row) => (
                     <li key={row.id}>
+                      {/* The whole row opens it, not only the name (owner, 23 Nov): the link covers the row. */}
                       <Link href={`/consultation/?id=${row.id}`} className="wa-row__ref" style={{ color: "inherit" }}>{who(row)}</Link>
                       <span className="wa-meta">{dateTime(row.scheduled_at)} · {LANGUAGE_LABEL[row.language]}</span>
                       <span className="wa-row__actions">

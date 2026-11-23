@@ -14,7 +14,6 @@ export type FormTemplate = { title: string; title_i18n?: Localized;
 export type FormAnswer = { field_key: string; machine_text: string | null; practitioner_text: string | null;
   review: string; value_type?: string; answer_state?: string; machine_value?: unknown; practitioner_value?: unknown };
 export type FormSignature = { field_key: string; signer_role: string; method: string; signed_name: string; signed_at: string };
-export type Turn = { start_seconds: number; speaker: "practitioner" | "patient"; machine_text: string; reviewed_text: string | null };
 export type ConsultationRecord = {
   patient: string; contact: string; scheduledAt: string; practitioner: string;
   /** When the form was approved; null for a draft, or when there is no form. */
@@ -22,7 +21,6 @@ export type ConsultationRecord = {
   /** The form as it was filled in; null when Watson has not filled one in yet. */
   template: FormTemplate | null;
   answers: FormAnswer[];
-  turns: Turn[];
   revision: number | null;
   revisionKind: string | null;
   templateHash: string | null;
@@ -112,18 +110,6 @@ export function formRows(record: ConsultationRecord): string[][] {
     ]),
     ...(record.template?.sections ?? []).flatMap((section) =>
       section.fields.map((field) => [section.title, field.label, answerText(answers.get(field.key), field)])),
-  ];
-}
-
-/** 75 -> "1:15". */
-const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
-
-/** The conversation, each line as corrected. */
-export function conversationRows(record: ConsultationRecord): string[][] {
-  return [
-    ["Time", "Who", "Words"],
-    ...record.turns.map((turn) => [clock(turn.start_seconds), turn.speaker === "patient" ? "Patient" : "Practitioner",
-      turn.reviewed_text ?? turn.machine_text]),
   ];
 }
 

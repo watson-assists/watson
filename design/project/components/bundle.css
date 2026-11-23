@@ -226,15 +226,12 @@ body {
 .wa-printed__only { font-weight: 400; font-style: italic; }
 .wa-printed__sign { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); padding-top: var(--space-8); font: 400 16px/24px var(--font-text); }
 .wa-printed__line { flex: 1 1 200px; border-bottom: 1px solid var(--ink); min-height: 24px; }
-.wa-printed__conversation ol { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; font: 400 16px/25px var(--font-text); }
-.wa-printed__who { font: 600 14px/24px var(--font-mono); color: var(--ink-muted); }
 @media (max-width: 560px) { .wa-printed__answers > div { grid-template-columns: minmax(0, 1fr); } .wa-printed { padding: var(--space-6) var(--space-4); } }
 @media print {
   .wa-header, .wa-noprint { display: none !important; }
   body { background: #fff; color: #000; }
   .wa-page { padding: 0; max-width: none; }
   .wa-printed { border: 0; border-radius: 0; padding: 0; box-shadow: none; break-after: page; }
-  .wa-printed__conversation { break-before: page; }
   @page { margin: 16mm; }
 }
 
@@ -321,6 +318,12 @@ body {
 .wa-done-list { display: grid; margin: 0; padding: 0; list-style: none; border-radius: 10px; background: var(--paper); box-shadow: var(--shadow-raised); }
 .wa-done-list > li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); padding: var(--space-3) var(--space-6); border-top: 1px solid var(--rule); font-size: 15px; }
 .wa-done-list > li:first-child { border-top: 0; }
+/* The whole row opens it: the name's link covers the row, its buttons stay on top. */
+.wa-done-list { overflow: hidden; }
+.wa-done-list > li:has(> .wa-row__ref) { position: relative; }
+.wa-done-list > li:has(> .wa-row__ref):hover { background: var(--paper-sunk); }
+.wa-done-list .wa-row__ref::after { content: ""; position: absolute; inset: 0; }
+.wa-done-list .wa-row__actions { position: relative; z-index: 1; }
 .wa-row__actions { display: inline-flex; align-items: center; gap: var(--space-2); margin-left: auto; }
 /* Form review: the answers, and the conversation beside them. */
 .wa-ring { --p: 0; display: grid; place-items: center; width: 84px; height: 84px; border-radius: 50%; background: conic-gradient(var(--lamp) calc(var(--p) * 1turn), color-mix(in srgb, var(--on-night) 16%, transparent) 0); }
@@ -516,3 +519,12 @@ body {
 button.wa-stat { border: 0; font: inherit; text-align: left; cursor: pointer; }
 .wa-stat:hover { background: color-mix(in srgb, var(--on-night) 14%, transparent); }
 .wa-stat[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--lamp); }
+
+/* A document over the page (owner, 23 Nov): a photo or a PDF, with Download and Close. */
+.wa-viewer { margin: auto; width: min(960px, calc(100vw - 32px)); height: min(90vh, 1200px); max-width: none; max-height: none; padding: 0; border: 0; border-radius: 12px; background: var(--paper); color: var(--ink); box-shadow: var(--shadow-raised); }
+.wa-viewer[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.wa-viewer::backdrop { background: color-mix(in srgb, var(--screen) 70%, transparent); }
+.wa-viewer__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--rule); }
+.wa-viewer__head .wa-heading { margin: 0; overflow-wrap: anywhere; }
+.wa-viewer__page { display: block; width: 100%; height: 100%; border: 0; object-fit: contain; background: var(--paper-sunk); }
+@media (max-width: 600px) { .wa-viewer { width: 100vw; height: 100dvh; border-radius: 0; } }

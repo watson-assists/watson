@@ -1,7 +1,7 @@
 // What a practitioner takes out of Watson (owner, 24 Oct: PDF or Excel, one patient or all of them).
-// The form in its own order with the answers as the practitioner left them, and the conversation.
+// The form in its own order with the answers as the practitioner left them; never the conversation (owner, 23 Nov).
 import { describe, expect, it } from "vitest";
-import { allPatientsRows, answerText, conversationRows, formRows, isTypedFormTemplate, type ConsultationRecord } from "./export";
+import { allPatientsRows, answerText, formRows, isTypedFormTemplate, type ConsultationRecord } from "./export";
 
 const template = { title: "Ayurvedic consultation", sections: [
   { title: "About the patient", fields: [{ key: "age", label: "Age" }, { key: "work", label: "Work" }] },
@@ -16,10 +16,6 @@ const jana: ConsultationRecord = {
     { field_key: "work", machine_text: "Teacher", practitioner_text: "Teacher, evening classes", review: "edited" },
     { field_key: "assessment", machine_text: "Vata imbalance", practitioner_text: null, review: "rejected" },
     { field_key: "private_notes", machine_text: null, practitioner_text: "Call back in a week", review: "edited" },
-  ],
-  turns: [
-    { start_seconds: 13.4, speaker: "patient", machine_text: "I wake at tree", reviewed_text: "I wake at three" },
-    { start_seconds: 75, speaker: "practitioner", machine_text: "Try warm milk.", reviewed_text: null },
   ],
   revision: 1, revisionKind: "generated", templateHash: "abc123", signatures: [{
     field_key: "practitioner_signoff", signer_role: "practitioner", method: "wet_ink_on_print",
@@ -75,20 +71,12 @@ describe("a consultation, taken out", () => {
       ["For you only", "Private notes", "Call back in a week"],
     ]);
   });
-
-  it("gives the conversation with each line as corrected", () => {
-    expect(conversationRows(jana)).toEqual([
-      ["Time", "Who", "Words"],
-      ["0:13", "Patient", "I wake at three"],
-      ["1:15", "Practitioner", "Try warm milk."],
-    ]);
-  });
 });
 
 describe("all patients, taken out at once", () => {
   it("is one row per consultation, one column per question, and says where a form is missing", () => {
     const ema: ConsultationRecord = { patient: "Ema Mráz", contact: "ema@example.com", scheduledAt: new Date(2026, 9, 20, 9, 0).toISOString(),
-      practitioner: "Dr. Robin Raju", approvedAt: null, template: null, answers: [], turns: [],
+      practitioner: "Dr. Robin Raju", approvedAt: null, template: null, answers: [],
       revision: null, revisionKind: null, templateHash: null, signatures: [] };
     expect(allPatientsRows([jana, ema])).toEqual([
       ["Patient", "Phone or email", "Date", "Practitioner", "Form", "Age", "Work", "Assessment", "Private notes"],

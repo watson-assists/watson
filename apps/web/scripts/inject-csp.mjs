@@ -35,6 +35,8 @@ for (const file of htmlFiles("out")) {
     "font-src 'self'",
     `media-src 'self' blob: ${api}`,
     `connect-src 'self' ${api} ${realtime}`,
+    // A patient's PDF, shown over the page from a local blob (owner, 23 Nov: documents open in the same window).
+    "frame-src blob:",
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'self'",

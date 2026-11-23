@@ -1,6 +1,6 @@
-// The practitioner's consultations as they are taken out of Watson (owner, 24 Oct): one, with its
-// conversation, or all of them. Row-level security keeps every query to the practitioner's own.
-import type { ConsultationRecord, FormAnswer, FormTemplate, Turn } from "./export";
+// The practitioner's consultations as they are taken out of Watson (owner, 24 Oct): one, or all of
+// them; never the conversation (owner, 23 Nov). Row-level security keeps every query to the practitioner's own.
+import type { ConsultationRecord, FormAnswer, FormTemplate } from "./export";
 import { currentFormRevision } from "./form-revisions";
 import { PATIENT_COLUMNS, shownPatient, type PatientColumns, type Person } from "./patient";
 import { loginName } from "./session";
@@ -11,7 +11,7 @@ type Form = { consultation_id: string; template: unknown; approved_at: string | 
   revision_number: number; revision_kind: string; template_hash: string;
   form_answers: FormAnswer[]; form_signatures: import("./export").FormSignature[] };
 
-/** One consultation (with its conversation), or every one the practitioner has, newest first. */
+/** One consultation, or every one the practitioner has, newest first. */
 export async function loadRecords(consultationId?: string): Promise<ConsultationRecord[] | null> {
   let consultations = supabase.from("consultations").select(`id, scheduled_at, synthetic_patient_ref, ${PATIENT_COLUMNS}`)
     .filter("released", "eq", false).order("scheduled_at", { ascending: false });
@@ -32,7 +32,6 @@ export async function loadRecords(consultationId?: string): Promise<Consultation
     const current = currentFormRevision(revisions);
     return current ? [[id, current] as const] : [];
   }));
-  const turns = consultationId ? await conversation(consultationId) : [];
   const rowsOf = (rows.data ?? []) as unknown as Row[];
   const earlier = await earlierPatients(rowsOf);
   return rowsOf.map((row) => {
@@ -45,7 +44,6 @@ export async function loadRecords(consultationId?: string): Promise<Consultation
       approvedAt: form?.approved_at ?? null,
       template: (form?.template as FormTemplate | undefined) ?? null,
       answers: form?.form_answers ?? [],
-      turns,
       revision: form?.revision_number ?? null,
       revisionKind: form?.revision_kind ?? null,
       templateHash: form?.template_hash ?? null,
@@ -61,13 +59,4 @@ export async function earlierPatients(rows: PatientColumns[]): Promise<Map<strin
   if (ids.length === 0) return new Map();
   const { data } = await supabase.from("patients").select("id, name, phone, email").in("id", ids);
   return new Map((data ?? []).map(({ id, ...person }) => [id, person]));
-}
-
-async function conversation(consultationId: string): Promise<Turn[]> {
-  const { data: transcript } = await supabase.from("transcripts").select("id").eq("consultation_id", consultationId)
-    .neq("review_status", "superseded").maybeSingle();
-  if (!transcript) return [];
-  const { data } = await supabase.from("transcript_segments").select("start_seconds, speaker, machine_text, reviewed_text")
-    .eq("transcript_id", transcript.id).order("position");
-  return (data ?? []) as Turn[];
 }

@@ -1,5 +1,5 @@
 // Saving a file the browser made (owner, 24 Oct: Excel exports).
-import { allPatientsRows, conversationRows, formRows, type ConsultationRecord } from "./export";
+import { allPatientsRows, formRows, type ConsultationRecord } from "./export";
 import { asDayMonthYear } from "./dates";
 import { workbook } from "./xlsx";
 
@@ -18,11 +18,10 @@ function save(name: string, bytes: Uint8Array, type: string) {
 const fileDate = (at: Date) => asDayMonthYear(at).replaceAll("/", "-");
 const safe = (name: string) => name.replace(/[\\/:*?"<>|]+/g, " ").trim();
 
-/** One consultation: its form, and the conversation on a second sheet. */
+/** One consultation: its form. Never the conversation, which stays in Watson (owner, 23 Nov). */
 export function downloadConsultation(record: ConsultationRecord) {
   save(`${safe(record.patient)} ${fileDate(new Date(record.scheduledAt))}.xlsx`, workbook([
     { name: "Form", rows: formRows(record), widths: [24, 34, 70] },
-    { name: "Conversation", rows: conversationRows(record), widths: [8, 14, 90] },
   ]), EXCEL);
 }
 

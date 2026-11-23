@@ -88,3 +88,25 @@ test("Home finds a patient by name, phone, email or number, and sorts them by la
   await expect(page.getByText(row!.synthetic_patient_ref)).toBeVisible();
   await expect(page.getByText(`Zoe Zúbek${tag}`)).toHaveCount(0);
 });
+
+// Owner, 23 Nov: "Patients name needs to be editable", where the doctor sees it: at the top.
+test("the doctor changes a confirmed patient's name at the top of the consultation, and it changes everywhere", async ({ page, account, problems }) => {
+  test.skip(Boolean(process.env.E2E_BASE_URL), "confirms a local patient directly");
+  const client = await as(account);
+  const made = await rpc(client, "create_consultation", {
+    p_scheduled_at: "2026-11-23T09:00:00Z", p_language: "sk", p_consent_recorded: true,
+    p_patient_name: `Zuzana Kovac-${suffix()}`, p_patient_contact: `+421 905 ${Math.floor(Math.random() * 9e5 + 1e5)}`,
+  });
+  expect(await rpc(client, "confirm_new_patient", { p_consultation_id: made.consultation_id })).toMatchObject({ ok: true });
+
+  await signIn(page, account);
+  await page.goto(`/consultation/?id=${made.consultation_id}`);
+  await page.getByRole("button", { name: "Change name" }).click();
+  const renamed = `Zuzana Kováčová-${suffix()}`;
+  await page.getByLabel("Patient's name").fill(renamed);
+  await page.getByRole("button", { name: "Save name" }).click();
+  await expect(page.getByRole("heading", { name: renamed, level: 1 })).toBeVisible();
+  await page.goto("/consultations/");
+  await expect(page.getByText(renamed).first()).toBeVisible();
+  expect(problems).toEqual([]);
+});

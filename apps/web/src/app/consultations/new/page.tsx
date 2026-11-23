@@ -10,7 +10,7 @@ import { z } from "@/lib/zod";
 import { AppShell } from "@/components/app-shell";
 import { FieldError, Notice } from "@/components/status";
 import { call, explain } from "@/lib/api";
-import { asClock, asDateInput, fromDateInputAndClock, fromDayAndClock, nextWeekday } from "@/lib/dates";
+import { asClock, asDateInput, fromDateInputAndClock, fromDayAndClock } from "@/lib/dates";
 import { feeSchema, fromCents, toCents } from "@/lib/fee";
 import { PAYMENTS } from "@/lib/features";
 import { formChoices } from "@/lib/form-choices";
@@ -22,7 +22,7 @@ import { supabase } from "@/lib/supabase";
 
 const schema = z.object({
   day: z.string().refine((day) => fromDateInputAndClock(day, "12:00") !== null, "Choose a date."),
-  clock: z.string().refine((clock) => fromDayAndClock("1/1/2026", clock) !== null, "Write the time on the 24-hour clock, like 14:30."),
+  clock: z.string().refine((clock) => fromDayAndClock("1/1/2026", clock) !== null, "Choose a time."),
   language: z.enum(["en", "de", "sk", "auto"], "Choose the language of the consultation."),
   consent_recorded: z.boolean(),
   scenario_notes: z.string().max(500, "Keep the notes under 500 characters."),
@@ -76,10 +76,11 @@ function NewConsultation() {
     });
   }, [getValues, setValue]);
 
+  // Now, as most consultations start straight away (owner, 23 Nov); both can be changed.
   useEffect(() => {
-    const next = nextWeekday(new Date());
-    setValue("day", asDateInput(next));
-    setValue("clock", asClock(next));
+    const now = new Date();
+    setValue("day", asDateInput(now));
+    setValue("clock", asClock(now));
   }, [setValue]);
 
   async function create(values: Values) {
@@ -149,8 +150,8 @@ function NewConsultation() {
                 <FieldError id="day-error" message={errors.day?.message} />
               </div>
               <div className="wa-field">
-                <label className="wa-label" htmlFor="clock">Time (24-hour)</label>
-                <input id="clock" className="wa-input" autoComplete="off" placeholder="14:30" aria-invalid={Boolean(errors.clock)}
+                <label className="wa-label" htmlFor="clock">Time</label>
+                <input id="clock" type="time" className="wa-input" autoComplete="off" aria-invalid={Boolean(errors.clock)}
                   aria-describedby="clock-error" {...register("clock")} />
                 <FieldError id="clock-error" message={errors.clock?.message} />
               </div>

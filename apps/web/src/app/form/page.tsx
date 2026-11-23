@@ -8,7 +8,8 @@ import { AppShell } from "@/components/app-shell";
 import { Notice } from "@/components/status";
 import { call, explain, isId } from "@/lib/api";
 import { clock } from "@/lib/audio";
-import { openDocument } from "@/lib/documents";
+import { DocumentViewer } from "@/components/document-viewer";
+import { openDocument, showsInPage, type Viewable } from "@/lib/documents";
 import { downloadConsultation } from "@/lib/download";
 import type { Tables } from "@/lib/database.types";
 import { isTypedFormTemplate } from "@/lib/export";
@@ -35,7 +36,7 @@ type Loaded = {
   answers: Answer[];
   segments: Map<number, Segment>;
   // The patient's documents the answers quote: name and where to open it.
-  documents: Map<string, { file_name: string; storage_path: string }>;
+  documents: Map<string, Viewable>;
   // Documents Watson did not have when it filled the form in (read after the engine took the job,
   // and not quoted): reason to fill it in again.
   late: { file_name: string; source: string; uploaded_at: string }[];
@@ -88,7 +89,7 @@ async function fetchForm(id: string): Promise<Loaded | "missing" | "failed"> {
     consultation.data.patient_id
       ? supabase.from("patients").select("name").eq("id", consultation.data.patient_id).maybeSingle()
       : Promise.resolve({ data: null }),
-    supabase.from("patient_documents").select("id, file_name, storage_path").eq("consultation_id", id)
+    supabase.from("patient_documents").select("id, file_name, storage_path, media_type").eq("consultation_id", id)
       .eq("reading", "read").is("removed_at", null),
     supabase.from("patient_documents").select("id, file_name, source, uploaded_at").eq("consultation_id", id)
       .eq("reading", "read").gt("read_at", form.data.form_jobs?.claimed_at ?? form.data.created_at).order("uploaded_at"),
@@ -122,8 +123,14 @@ function FormView() {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [active, setActive] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<Viewable | null>(null);
   const aside = useRef<HTMLElement>(null);
   const router = useRouter();
+  const notOpened = () => setProblem("The document could not be opened. Try again.");
+  async function openQuoted(document: Viewable) {
+    if (showsInPage(document.media_type)) return setViewing(document);
+    if (!(await openDocument(document.storage_path))) notOpened();
+  }
 
   const load = useCallback(() => {
     fetchForm(id).then(setLoaded);
@@ -272,7 +279,7 @@ function FormView() {
                     <span className="wa-quote__who" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
                       <FileText aria-hidden className="wa-icon wa-icon--sm" />
                       {document ? (
-                        <button type="button" className="wa-link" onClick={() => void openDocument(document.storage_path)}>{document.file_name}</button>
+                        <button type="button" className="wa-link" onClick={() => void openQuoted(document)}>{document.file_name}</button>
                       ) : "A removed document"} · page {quote.page}
                     </span>
                     <p className="wa-quote__text">{quote.text}</p>
@@ -416,6 +423,7 @@ function FormView() {
           </button>
         </div>
       )}
+      <DocumentViewer document={viewing} onClose={() => setViewing(null)} onFailed={() => { setViewing(null); notOpened(); }} />
     </>
   );
 }
