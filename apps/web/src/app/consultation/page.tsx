@@ -63,6 +63,8 @@ function stepLines({ consultation, tracks }: Loaded): string[] {
   const { stages } = summarise(consultation.status);
   return [
     consultation.consent_withdrawn_at ? `Withdrawn ${dayMonth(consultation.consent_withdrawn_at)}`
+      : consultation.patient_recording === "declined" ? "Patient said no to recording"
+      : consultation.patient_recording === "agreed" ? `Patient agreed ${dayMonth(consultation.patient_recording_at!)}`
       : consultation.consent_recorded_at ? `Recorded ${dayMonth(consultation.consent_recorded_at)}` : "Not recorded yet",
     stages[1] === "done" ? "Recorded" : stages[1] === "current" && tracks.length > 0 ? "Saved in part" : "Not yet",
     { current: consultation.status === "transcription_processing" ? "Transcribing" : "Ready to start", failed: "Failed", done: "Done" }[

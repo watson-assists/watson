@@ -194,6 +194,8 @@ export type Database = {
           patient_claim_phone: string | null
           patient_claim_updated_at: string | null
           patient_id: string | null
+          patient_recording: string | null
+          patient_recording_at: string | null
           practitioner_id: string
           previous_consultation_id: string | null
           recorded_together: boolean
@@ -236,6 +238,8 @@ export type Database = {
           patient_claim_phone?: string | null
           patient_claim_updated_at?: string | null
           patient_id?: string | null
+          patient_recording?: string | null
+          patient_recording_at?: string | null
           practitioner_id: string
           previous_consultation_id?: string | null
           recorded_together?: boolean
@@ -276,6 +280,8 @@ export type Database = {
           patient_claim_phone?: string | null
           patient_claim_updated_at?: string | null
           patient_id?: string | null
+          patient_recording?: string | null
+          patient_recording_at?: string | null
           practitioner_id?: string
           previous_consultation_id?: string | null
           recorded_together?: boolean
@@ -1219,6 +1225,7 @@ export type Database = {
           overlap: boolean | null
           position: number
           possibly_not_speech: boolean
+          removed_at: string | null
           review_status: string
           reviewed_text: string | null
           speaker: Database["public"]["Enums"]["speaker"]
@@ -1234,6 +1241,7 @@ export type Database = {
           overlap?: boolean | null
           position: number
           possibly_not_speech?: boolean
+          removed_at?: string | null
           review_status?: string
           reviewed_text?: string | null
           speaker: Database["public"]["Enums"]["speaker"]
@@ -1248,6 +1256,7 @@ export type Database = {
           overlap?: boolean | null
           position?: number
           possibly_not_speech?: boolean
+          removed_at?: string | null
           review_status?: string
           reviewed_text?: string | null
           speaker?: Database["public"]["Enums"]["speaker"]
@@ -1681,6 +1690,7 @@ export type Database = {
         Returns: Json
       }
       patient_link_consultation: { Args: { p_token: string }; Returns: Json }
+      patient_recording_choice: { Args: { p_agree: boolean; p_token: string }; Returns: Json }
       patient_remove_document: { Args: { p_document_id: string; p_token: string }; Returns: Json }
       patient_review_association: {
         Args: { p_consultation_id: string; p_decision: string; p_patient_id: string }
@@ -1705,6 +1715,7 @@ export type Database = {
         Args: { p_amount_cents: number; p_consultation_id: string; p_session_id: string }
         Returns: Json
       }
+      recording_question: { Args: { p_token: string }; Returns: Json }
       register_audio_track: {
         Args: {
           p_consultation_id: string
@@ -1742,6 +1753,7 @@ export type Database = {
         Returns: Json
       }
       remove_document: { Args: { p_document_id: string }; Returns: Json }
+      remove_transcript_line: { Args: { p_remove: boolean; p_segment_id: string }; Returns: Json }
       renew_hold: { Args: { p_token: string }; Returns: Json }
       resolve_form_reconciliation: { Args: { p_conflict_id: string }; Returns: Json }
       review_form_answer: {

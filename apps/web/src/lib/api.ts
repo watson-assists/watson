@@ -42,6 +42,7 @@ const MESSAGE: Record<string, string> = {
   NOT_SIGNED_IN: "You are signed out. Sign in again.",
   PAYMENT_REQUIRED: "Pay for the consultation first, then join the call.",
   CALL_CLOSED: "This consultation's call has ended.",
+  RECORDING_KEPT: "The call has already been recorded, so the answer can no longer be changed.",
   VALIDATION: "One of the values was not accepted. Check the form and try again.",
   STORAGE_UNAVAILABLE: "The service could not be reached. Check your connection and try again.",
   PATIENT_MISSING: "Add the patient's name and phone number or email first.",

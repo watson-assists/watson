@@ -8,7 +8,7 @@ import { AppShell } from "@/components/app-shell";
 import { CopyButton } from "@/components/copy-button";
 import { CorrectableLine } from "@/components/correctable-line";
 import { Notice } from "@/components/status";
-import { call as rpc, explain } from "@/lib/api";
+import { call as rpc } from "@/lib/api";
 import { clock } from "@/lib/audio";
 import { connect, patientLink, recordCall, type CallState, type Recording } from "@/lib/call";
 import type { Tables } from "@/lib/database.types";
@@ -37,7 +37,7 @@ export default function RoomPage() {
 
 const NOTE: Partial<Record<CallState, [string, string]>> = {
   joining: ["Opening the call…", ""],
-  waiting: ["Waiting for the patient", "Send them the link above. Recording starts when they join."],
+  waiting: ["Waiting for the patient", "Send them the link above. Watson records only if they agree, on their link."],
   connecting: ["Connecting…", ""],
   reconnecting: ["The connection dropped. Reconnecting…", "Recording continues."],
 };
@@ -55,6 +55,7 @@ function Room({ userId }: { userId: string }) {
   const [cameraOff, setCameraOff] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [recording, setRecording] = useState(false);
+  const [declined, setDeclined] = useState(false); // the patient chose not to be recorded
   const [lines, setLines] = useState<LiveLine[]>([]);
   const transcript = useRef<HTMLOListElement>(null);
   const localVideo = useRef<HTMLVideoElement>(null);
@@ -138,11 +139,6 @@ function Room({ userId }: { userId: string }) {
     } catch {
       return setProblem("The camera or microphone is not available. Allow them in your browser, then try again.");
     }
-    if (consultation.status === "consent_pending") {
-      // Test mode records every call; consent is recorded as the call starts (decision 0005).
-      const outcome = await rpc("record_consent", { p_consultation_id: id });
-      if (!outcome.ok) return setProblem(explain(outcome.error_category));
-    }
     media.current = local;
     if (localVideo.current) localVideo.current.srcObject = local;
     const invite = consultation.invite_token; // the link the patient already has
@@ -157,12 +153,20 @@ function Room({ userId }: { userId: string }) {
       },
       onState: (next) => {
         setState(next);
-        if (next === "connected") {
+        // Recording starts only once the patient has agreed, on their link (owner, 23 Nov).
+        if (next === "connected") void patientAgreed().then((agreed) => {
+          setDeclined(!agreed);
+          if (!agreed) return;
           recording.start();
           setRecording(true);
-        }
+        });
       },
     });
+  }
+
+  async function patientAgreed() {
+    const { data } = await supabase.from("consultations").select("patient_recording").eq("id", id).maybeSingle();
+    return data?.patient_recording === "agreed";
   }
 
   async function save(recording: Recording) {
@@ -210,7 +214,7 @@ function Room({ userId }: { userId: string }) {
       <div className="wa-pagehead">
         <div className="wa-pagehead__text">
           <h1 className="wa-title">{consultation.patients?.name ?? consultation.patient_claim_name ?? consultation.synthetic_patient_ref}</h1>
-          <p className="wa-meta">Video call. Both voices are recorded, with a live transcript beside the video; the full transcript follows when you end the call.</p>
+          <p className="wa-meta">Video call. If the patient agrees, both voices are recorded, with a live transcript beside the video; the full transcript follows when you end the call.</p>
         </div>
       </div>
       <div className="wa-room">
@@ -233,6 +237,7 @@ function Room({ userId }: { userId: string }) {
             </div>
           )}
           {recording && live && <span className="wa-live" role="status">Recording {clock(elapsed)}</span>}
+          {declined && live && <span className="wa-live wa-live--off" role="status">Not recorded</span>}
           <div className="wa-screen__self"><video ref={localVideo} autoPlay playsInline muted aria-label="You" /></div>
         </div>
         <div className="wa-call__bar">
@@ -267,9 +272,10 @@ function Room({ userId }: { userId: string }) {
         <aside className="wa-livetext" aria-labelledby="live-title">
           <h2 className="wa-heading" id="live-title" style={{ color: "var(--ink)" }}>Live transcript</h2>
           <p className="wa-hint">
-            {lines.length ? "About 15 seconds behind. The full transcript follows when you end the call."
+            {declined ? "The patient chose not to be recorded, so this call has no transcript."
+              : lines.length ? "A few seconds behind. The full transcript follows when you end the call."
               : recording ? "Starting Watson's engine… the first words appear in about half a minute."
-              : "Starts when the patient joins."}
+              : "Starts when the patient joins and agrees to recording."}
           </p>
           <ol ref={transcript} className="wa-livetext__lines" aria-live="polite">
             {lines.map((line) => (

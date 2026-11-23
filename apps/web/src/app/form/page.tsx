@@ -77,7 +77,7 @@ async function fetchForm(id: string): Promise<Loaded | "missing" | "failed"> {
   if (!consultation.data || !form.data) return "missing";
   const [answers, segments, attestations, signatures, conflicts] = await Promise.all([
     supabase.from("form_answers").select("*").eq("form_id", form.data.id).order("position"),
-    supabase.from("transcript_segments").select("position, speaker, start_seconds, machine_text, reviewed_text")
+    supabase.from("transcript_segments").select("position, speaker, start_seconds, machine_text, reviewed_text").is("removed_at", null)
       .eq("transcript_id", form.data.transcript_id).order("position"),
     supabase.from("form_attestations").select("*").eq("form_id", form.data.id),
     supabase.from("form_signatures").select("*").eq("form_id", form.data.id),

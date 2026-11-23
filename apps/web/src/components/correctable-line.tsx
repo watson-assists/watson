@@ -8,13 +8,15 @@ import { spellingsFrom, type Spelling } from "@/lib/spelling";
  * speak"). The Correct button is always visible; the record keeps what Watson heard, and a few words
  * changed teach Watson their spelling for this patient.
  */
-export function CorrectableLine({ text, heard, editable = true, textClassName, onSave }: {
+export function CorrectableLine({ text, heard, editable = true, textClassName, onSave, onRemove }: {
   text: string;
   /** What Watson heard, when it differs from the text. */
   heard: string | null;
   editable?: boolean;
   textClassName: string;
   onSave: (text: string, spellings: Spelling[]) => Promise<boolean>;
+  /** Takes the line out of the conversation (owner, 23 Nov); absent where lines cannot be removed. */
+  onRemove?: () => void;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -60,7 +62,10 @@ export function CorrectableLine({ text, heard, editable = true, textClassName, o
         {heard !== null && heard !== text && <span className="wa-corrected">Corrected</span>}
       </p>
       {editable && (
-        <button type="button" className="wa-button wa-button--secondary wa-correct__button" onClick={() => setDraft(text)}>Correct</button>
+        <div className="wa-actions">
+          <button type="button" className="wa-button wa-button--secondary wa-correct__button" onClick={() => setDraft(text)}>Correct</button>
+          {onRemove && <button type="button" className="wa-button wa-button--quiet wa-correct__button" onClick={onRemove}>Remove</button>}
+        </div>
       )}
     </div>
   );

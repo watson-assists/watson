@@ -208,6 +208,8 @@ body {
 .wa-screen__note { position: absolute; inset: 0; display: grid; place-content: center; gap: var(--space-2); padding: var(--space-6); color: var(--on-screen); text-align: center; }
 .wa-live { position: absolute; top: var(--space-3); left: var(--space-3); display: inline-flex; align-items: center; gap: 6px; padding: 2px var(--space-3) 2px var(--space-2); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--screen) 70%, transparent); color: var(--on-screen); font: 600 13px/20px var(--font-text); font-variant-numeric: tabular-nums; }
 .wa-live::before { content: ""; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--on-screen); animation: wa-pulse 1.2s ease-in-out infinite; }
+/* Not recorded: the patient said no (owner, 23 Nov). A still, hollow dot: nothing is being kept. */
+.wa-live--off::before { background: transparent; border: 2px solid var(--on-screen); animation: none; }
 .wa-call__bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-3); }
 .wa-invite { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .wa-invite > .wa-input { flex: 1; min-width: 0; font: 400 14px/20px var(--font-mono); }
@@ -239,6 +241,11 @@ body {
 .wa-correct { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2) var(--space-3); align-items: start; }
 .wa-correct > p { margin: 0; }
 .wa-correct__button { min-height: 44px; }
+/* A line the practitioner removed from the conversation: only the fact remains, with Undo (owner, 23 Nov). */
+.wa-turn__removed { margin: 0; color: var(--ink-muted); font-style: italic; }
+.wa-turn--removed .wa-turn__body { padding-block: var(--space-2); }
+/* On a phone the buttons go under the words, so the words keep the width. */
+@media (max-width: 600px) { .wa-correct { grid-template-columns: minmax(0, 1fr); } }
 .wa-correct--editing { grid-template-columns: minmax(0, 1fr); padding: var(--space-3); border-radius: var(--radius-control); background: var(--practitioner-tint); }
 .wa-correct--editing .wa-textarea { min-height: 84px; font-size: 18px; line-height: 27px; }
 .wa-correct__heard { margin: 0; font: 400 15px/22px var(--font-text); color: var(--ink-muted); }

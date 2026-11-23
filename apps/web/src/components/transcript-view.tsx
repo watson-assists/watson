@@ -29,7 +29,7 @@ async function fetchTranscript(consultationId: string): Promise<Loaded | "failed
 
 /**
  * The conversation as one column of turns, with the two tracks as rails down its edge. Until the form
- * is approved, every line can be corrected (owner, 24 Oct).
+ * is approved, every line can be corrected (owner, 24 Oct) or removed and put back (owner, 23 Nov).
  */
 export function TranscriptView({ consultationId, language, editable }: { consultationId: string; language: string; editable: boolean }) {
   const [loaded, setLoaded] = useState<Loaded | "failed" | null>(null);
@@ -51,12 +51,21 @@ export function TranscriptView({ consultationId, language, editable }: { consult
     return true;
   }, [consultationId]);
 
+  const [failed, setFailed] = useState(false);
+  const remove = useCallback(async (segmentId: string, removed: boolean) => {
+    const outcome = await call("remove_transcript_line", { p_segment_id: segmentId, p_remove: removed });
+    setFailed(!outcome.ok);
+    if (outcome.ok) setLoaded(await fetchTranscript(consultationId));
+  }, [consultationId]);
+
   if (loaded === null) return <p className="wa-meta" role="status">Loading the transcript…</p>;
   if (loaded === "failed") {
     return <Notice tone="failed" title="The transcript could not be loaded">Check your connection and reload the page.</Notice>;
   }
 
-  const { transcript, segments } = loaded;
+  const { transcript } = loaded;
+  const segments = loaded.segments.filter((segment) => segment.removed_at === null);
+  const removed = loaded.segments.length - segments.length;
   const threshold = transcript.low_confidence_threshold;
   const unsure = (segment: Tables<"transcript_segments">) =>
     !segment.possibly_not_speech && segment.confidence !== null && segment.confidence < threshold;
@@ -71,6 +80,7 @@ export function TranscriptView({ consultationId, language, editable }: { consult
         <ul className="wa-facts">
           <li>{segments.length} {segments.length === 1 ? "turn" : "turns"}</li>
           {toCheck > 0 && <li>{toCheck} to check</li>}
+          {removed > 0 && <li>{removed} removed</li>}
           {overlaps > 0 && <li>{overlaps} {overlaps === 1 ? "overlap" : "overlaps"}</li>}
           <li>{language}</li>
         </ul>
@@ -91,13 +101,29 @@ export function TranscriptView({ consultationId, language, editable }: { consult
               {learned.map((spelling) => `\u201c${spelling.written}\u201d`).join(", ")}, throughout this transcript and in this patient&rsquo;s next consultations.
             </Notice>
           )}
+          {removed > 0 && (
+            <Notice title="Removed lines stay out of the form">
+              Watson leaves them out when it fills in the form, and erases them when you approve it. If the form was filled in before you removed them, press Fill in again on the form.
+            </Notice>
+          )}
+          {failed && <Notice tone="failed" title="That did not work">Check your connection and try again.</Notice>}
           {approximate && (
             <Notice title="The order of turns is a best guess">
               The two tracks were not recorded together, so overlaps cannot be shown.
             </Notice>
           )}
           <ol className={approximate ? "wa-turns wa-turns--approximate" : "wa-turns"}>
-            {segments.map((segment) => (
+            {loaded.segments.map((segment) => segment.removed_at !== null ? (
+              <li key={segment.id} className={`wa-turn wa-turn--${segment.speaker} wa-turn--removed`}>
+                <div className="wa-turn__body">
+                  <p className="wa-turn__removed">
+                    Removed from the conversation{" "}
+                    {editable && <button type="button" className="wa-button wa-button--quiet wa-button--small"
+                      onClick={() => void remove(segment.id, false)}>Undo</button>}
+                  </p>
+                </div>
+              </li>
+            ) : (
               <li key={segment.id} className={[
                 "wa-turn", `wa-turn--${segment.speaker}`,
                 segment.overlap ? "wa-turn--overlap" : "", segment.possibly_not_speech ? "wa-turn--unsure" : "",
@@ -112,7 +138,8 @@ export function TranscriptView({ consultationId, language, editable }: { consult
                   </p>
                   <CorrectableLine textClassName="wa-turn__text" text={segment.reviewed_text ?? segment.machine_text}
                     heard={segment.reviewed_text === null ? null : segment.machine_text} editable={editable}
-                    onSave={(text, spellings) => correct(segment.id, text, spellings)} />
+                    onSave={(text, spellings) => correct(segment.id, text, spellings)}
+                    onRemove={() => void remove(segment.id, true)} />
                 </div>
               </li>
             ))}

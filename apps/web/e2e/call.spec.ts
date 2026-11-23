@@ -33,3 +33,37 @@ test("a video call records both voices and starts transcription when it ends", a
   await elsewhere.close();
   expect(problems).toEqual([]);
 });
+
+// Owner's test team, 23 Nov: the patient answers for themselves before joining. Saying no, the call
+// goes ahead and nothing is recorded.
+test("a patient who says no to recording joins a call that is not recorded", async ({ page, account, browser, problems }) => {
+  test.setTimeout(120_000);
+  await signIn(page, account);
+  await page.getByRole("link", { name: "New consultation" }).first().click();
+  await page.getByLabel("Patient's name").fill("Ema Mráz");
+  await page.getByLabel("Phone or email").fill(`+421 905 ${Math.floor(Math.random() * 9e5 + 1e5)}`);
+  await page.getByRole("button", { name: "Create consultation" }).click();
+  await expect(page).toHaveURL(/\/consultation\/\?id=/);
+  const consultation = page.url();
+  await page.getByRole("link", { name: "Start video call" }).click();
+  await page.getByRole("button", { name: "Start video call" }).click();
+  const link = await page.getByLabel("Send this link to the patient").inputValue();
+
+  const elsewhere = await browser.newContext({ permissions: ["microphone", "camera"] });
+  const patient = await elsewhere.newPage();
+  await patient.goto(link);
+  await expect(patient.getByRole("heading", { name: "Before you join" })).toBeVisible();
+  await expect(patient.getByText("Your voice is recorded and written down.")).toBeVisible();
+  await patient.getByRole("button", { name: "Join without recording" }).click();
+  await expect(patient.getByText("Not recorded")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Not recorded")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("The patient chose not to be recorded, so this call has no transcript.")).toBeVisible();
+  await expect(page.getByText(/^Recording \d+:\d\d$/)).toHaveCount(0);
+
+  await page.getByRole("button", { name: "End call" }).click();
+  await expect(page).toHaveURL(consultation);
+  await expect(page.getByText("Patient said no to recording")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^Transcri(bing|pt)$/ })).toHaveCount(0);
+  await elsewhere.close();
+  expect(problems).toEqual([]);
+});

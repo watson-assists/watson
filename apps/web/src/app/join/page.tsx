@@ -16,6 +16,8 @@ type Details = {
   scheduled_at: string; fee_cents: number | null; paid: boolean; paid_at: string | null;
   patient: { name: string; contact: string } | null; documents: SentDocument[]; whatsapp_code: string;
   booked_from: string | null;
+  /** Who records the call, and what the patient answered: "agreed", "declined", or not yet. */
+  practitioner: string | null; recording: "agreed" | "declined" | null;
 };
 
 /** Where a patient joins a call from the doctor's link. No account, no sign-in. */
@@ -54,6 +56,7 @@ function Join() {
   const [problem, setProblem] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
+  const [asking, setAsking] = useState(false); // changing their answer to recording
   const localVideo = useRef<HTMLVideoElement>(null);
   const remoteVideo = useRef<HTMLVideoElement>(null);
   const session = useRef<{ leave(): Promise<void> } | null>(null);
@@ -65,8 +68,11 @@ function Join() {
   }, []);
 
   const fetchDetails = useCallback(async (): Promise<Details | "missing"> => {
-    const result = await call<Details>("invite_details", { p_token: token });
-    return result.ok ? result : "missing";
+    const [result, question] = await Promise.all([
+      call<Omit<Details, "practitioner" | "recording">>("invite_details", { p_token: token }),
+      call<Pick<Details, "practitioner" | "recording">>("recording_question", { p_token: token }),
+    ]);
+    return result.ok && question.ok ? { ...result, practitioner: question.practitioner, recording: question.recording } : "missing";
   }, [token]);
 
   useEffect(() => {
@@ -94,6 +100,16 @@ function Join() {
     setPaying(false);
     if (answer?.error === "TIME_TAKEN") setTaken(true);
     else setPayProblem("Payment is not available right now. Try again in a moment.");
+  }
+
+  // The patient's own answer to recording, before they join (owner, 23 Nov). Either way, they join.
+  async function answer(agree: boolean) {
+    setProblem(null);
+    const outcome = await call("patient_recording_choice", { p_token: token, p_agree: agree });
+    if (!outcome.ok) return setProblem(explain(outcome.error_category));
+    setDetails((current) => current && current !== "missing" ? { ...current, recording: agree ? "agreed" : "declined" } : current);
+    setAsking(false);
+    await join();
   }
 
   async function join() {
@@ -138,7 +154,7 @@ function Join() {
     <>
       <div className="wa-pagehead__text">
         <h1 className="wa-title">Your consultation</h1>
-        <p className="wa-meta">{dateTime(details.scheduled_at)} · a video call with your practitioner. The conversation is recorded.</p>
+        <p className="wa-meta">{dateTime(details.scheduled_at)} · a video call with your practitioner.</p>
       </div>
       {mustPay ? (
         <>
@@ -168,6 +184,30 @@ function Join() {
           {euros(details.fee_cents ?? 0)}{details.paid_at ? ` on ${dateTime(details.paid_at)}` : ""}. Stripe emails you a receipt.
         </Notice>
       )}
+      {state === null && (details.recording === null || asking) && (
+        <section className="wa-panel" aria-labelledby="recording-title">
+          <h2 className="wa-heading" id="recording-title">Before you join</h2>
+          <p className="wa-text">{details.practitioner ?? "Your practitioner"} records this call, so Watson can write the notes of your consultation.</p>
+          <ul className="wa-text" style={{ margin: 0, paddingLeft: "1.2em", listStyle: "disc" }}>
+            <li>Your voice is recorded and written down.</li>
+            <li>Only {details.practitioner ?? "your practitioner"} sees it.</li>
+            <li>Until the notes are approved, you can ask for the recording to be deleted.</li>
+          </ul>
+          <div className="wa-actions">
+            <button type="button" className="wa-button wa-button--primary" onClick={() => void answer(true)}>
+              <Video aria-hidden className="wa-icon" />I agree, join the call
+            </button>
+            <button type="button" className="wa-button wa-button--secondary" onClick={() => void answer(false)}>Join without recording</button>
+          </div>
+          <p className="wa-hint"><Link href="/privacy/">How Watson keeps your information</Link></p>
+        </section>
+      )}
+      {state === null && details.recording !== null && !asking && (
+        <p className="wa-meta" style={{ margin: 0 }}>
+          {details.recording === "agreed" ? "You agreed to this call being recorded." : "This call will not be recorded."}{" "}
+          <button type="button" className="wa-button wa-button--quiet wa-button--small" onClick={() => setAsking(true)}>Change your answer</button>
+        </p>
+      )}
       <div className="wa-call">
         <div className="wa-screen">
           <video ref={remoteVideo} autoPlay playsInline aria-label="Your practitioner" />
@@ -179,11 +219,13 @@ function Join() {
               </p>
             </div>
           )}
-          {state === "connected" && <span className="wa-live" role="status">Recorded</span>}
+          {state === "connected" && (details.recording === "agreed"
+            ? <span className="wa-live" role="status">Recorded</span>
+            : <span className="wa-live wa-live--off" role="status">Not recorded</span>)}
           <div className="wa-screen__self"><video ref={localVideo} autoPlay playsInline muted aria-label="You" /></div>
         </div>
         <div className="wa-call__bar">
-          {state === null ? (
+          {state === null ? details.recording !== null && !asking && (
             <button type="button" className="wa-button wa-button--primary" onClick={join}>
               <Video aria-hidden className="wa-icon" />Join the call
             </button>

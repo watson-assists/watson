@@ -47,6 +47,40 @@ test("after the call, a line of the transcript is corrected, and the name is spe
   expect(problems).toEqual([]);
 });
 
+// Owner's test team, 23 Nov: "parts of the conversation does not need to be in the transcript which could be edited out".
+test("after the call, a line is removed from the conversation, and put back with Undo", async ({ page, account, problems }) => {
+  const client = await as(account);
+  const made = await client.rpc("create_consultation", {
+    p_scheduled_at: "2026-11-23T09:00:00Z", p_language: "en", p_consent_recorded: true,
+    p_patient_name: "Jana Nováková", p_patient_contact: contact(),
+  });
+  const id = (made.data as { consultation_id: string }).consultation_id;
+  sqlAsOwner(`
+    with j as (insert into public.transcription_jobs (consultation_id, requested_by, status, finished_at)
+               select id, practitioner_id, 'completed', now() from public.consultations where id = '${id}' returning id),
+    t as (insert into public.transcripts (consultation_id, job_id, schema_version, ordering, low_confidence_threshold, tracks)
+          select '${id}', id, '2.0.0', 'exact', 0.5, '[]' from j returning id)
+    insert into public.transcript_segments (id, transcript_id, position, speaker, start_seconds, end_seconds, machine_text)
+      select gen_random_uuid(), t.id, n - 1, 'patient', n, n + 1, line
+      from t, unnest(array['I sleep badly since August.', 'By the way, my neighbour drinks too much.']) with ordinality as l(line, n);
+    update public.consultations set status = 'transcript_ready' where id = '${id}';`);
+
+  await signIn(page, account);
+  await page.goto(`/consultation/?id=${id}`);
+  const transcript = page.getByRole("region", { name: "Transcript" });
+  const aside = transcript.getByRole("listitem").filter({ hasText: "my neighbour drinks too much" });
+  await aside.getByRole("button", { name: "Remove" }).click();
+  await expect(transcript.getByText("my neighbour drinks too much", { exact: false })).toHaveCount(0);
+  await expect(transcript.getByText("Removed from the conversation")).toBeVisible();
+  await expect(transcript.getByText("Removed lines stay out of the form")).toBeVisible();
+  await page.reload();
+  await expect(transcript.getByText("my neighbour drinks too much", { exact: false })).toHaveCount(0);
+  await transcript.getByRole("button", { name: "Undo" }).click();
+  await expect(transcript.getByText("By the way, my neighbour drinks too much.")).toBeVisible();
+  await expect(transcript.getByText("I sleep badly since August.")).toBeVisible();
+  expect(problems).toEqual([]);
+});
+
 test("during the call, a line of the live transcript is corrected as it appears", async ({ page, account, browser, problems }) => {
   test.setTimeout(120_000);
   const engine = await newEngine(localStack(), "fix-e2e");
