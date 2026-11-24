@@ -1455,6 +1455,13 @@ export type Database = {
           },
         ]
       }
+      voice_notes: {
+        Row: { claimed_at: string | null; consultation_id: string; created_at: string; engine_user_id: string | null; id: string; status: string; storage_path: string }
+        ComputedFields: never
+        Insert: { claimed_at?: string | null; consultation_id: string; created_at?: string; engine_user_id?: string | null; id: string; status?: string; storage_path: string }
+        Update: { claimed_at?: string | null; consultation_id?: string; created_at?: string; engine_user_id?: string | null; id?: string; status?: string; storage_path?: string }
+        Relationships: []
+      }
       whatsapp_messages: {
         Row: {
           body: string | null
@@ -1533,6 +1540,7 @@ export type Database = {
         }
         Returns: Json
       }
+      add_voice_note: { Args: { p_consultation_id: string; p_id: string }; Returns: Json }
       add_live_piece: {
         Args: {
           p_consultation_id: string
@@ -1613,6 +1621,9 @@ export type Database = {
       engine_claim_form_job: { Args: Record<PropertyKey, never>; Returns: Json }
       engine_claim_job: { Args: Record<PropertyKey, never>; Returns: Json }
       engine_claim_live_piece: { Args: Record<PropertyKey, never>; Returns: Json }
+      engine_claim_voice_note: { Args: Record<PropertyKey, never>; Returns: Json }
+      engine_voice_note_done: { Args: { p_id: string; p_text: string }; Returns: Json }
+      engine_voice_note_failed: { Args: { p_id: string }; Returns: Json }
       engine_complete_call_fill: {
         Args: { p_answers: Json; p_attempt: number; p_job_id: string; p_metrics?: Json }
         Returns: Json

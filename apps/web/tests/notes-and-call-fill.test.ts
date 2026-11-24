@@ -161,3 +161,30 @@ describe("a form without a recording", () => {
       .toMatchObject({ ok: false, error_category: "NOT_FOUND" });
   });
 });
+
+describe("the doctor's voice notes", () => {
+  async function claimNote(id: string) {
+    for (let i = 0; i < 20; i++) {
+      const note = (await rpc(engine.client, "engine_claim_voice_note")).note as { id: string } | null;
+      if (!note) break;
+      if (note.id === id) return note;
+      await rpc(engine.client, "engine_voice_note_failed", { p_id: note.id });
+    }
+    throw new Error("voice note was never offered to the engine");
+  }
+
+  it("are the doctor's to add while the form is open, and their words join the notes", async () => {
+    const id = await consultation(false);
+    const note = crypto.randomUUID();
+    expect(await rpc(finn.client, "add_voice_note", { p_consultation_id: id, p_id: note })).toMatchObject({ ok: false, error_category: "NOT_FOUND" });
+    const { error } = await finn.client.storage.from("audio").upload(`${eva.id}/${id}/notes/${note}`, new Blob(["x"], { type: "audio/webm" }));
+    expect(error).not.toBeNull();
+    expect(await rpc(eva.client, "add_voice_note", { p_consultation_id: id, p_id: note })).toEqual({ ok: true });
+    await claimNote(note);
+    expect(await rpc(engine.client, "engine_voice_note_done", { p_id: note, p_text: " Tongue coated. " })).toEqual({ ok: true });
+    expect((await eva.client.from("doctor_notes").select("text").eq("consultation_id", id).single()).data).toEqual({ text: "Tongue coated." });
+    sqlAsOwner(`update public.consultations set status = 'approved' where id = '${id}';`);
+    expect(await rpc(eva.client, "add_voice_note", { p_consultation_id: id, p_id: crypto.randomUUID() }))
+      .toMatchObject({ ok: false, error_category: "INVALID_STATE_TRANSITION" });
+  });
+});

@@ -396,7 +396,11 @@ def test_a_form_filled_during_the_call_is_a_preview_beside_it_and_the_call_goes_
     consultation_id = _data(
         client.rpc(
             "create_consultation",
-            {"p_scheduled_at": "2026-11-24T09:00:00Z", "p_language": "en", "p_consent_recorded": True},
+            {
+                "p_scheduled_at": "2026-11-24T09:00:00Z",
+                "p_language": "en",
+                "p_consent_recorded": True,
+            },
         )
     )["consultation_id"]
     subprocess.run(
@@ -417,7 +421,10 @@ def test_a_form_filled_during_the_call_is_a_preview_beside_it_and_the_call_goes_
         client.table("form_jobs").select("status, preview").eq("consultation_id", consultation_id)
     )
     assert job == [
-        {"status": "completed", "preview": [{"key": "age", "text": "Sleeps badly for three weeks."}]}
+        {
+            "status": "completed",
+            "preview": [{"key": "age", "text": "Sleeps badly for three weeks."}],
+        }
     ]
     assert _status(dana, consultation_id) == "ready_for_audio"
 
@@ -559,7 +566,8 @@ def test_a_document_the_patient_sends_is_read_and_quoted_in_the_form(
 def _no_live_pieces() -> None:
     subprocess.run(
         ["docker", "exec", "-i", "supabase_db_watson", "psql", "-U", "postgres", "-q"],
-        input="update public.live_pieces set status = 'failed' where status in ('waiting', 'reading');",
+        input="update public.live_pieces set status = 'failed' where status in ('waiting', 'reading');"
+        " update public.voice_notes set status = 'failed' where status in ('waiting', 'reading');",
         text=True,
         check=True,
     )
@@ -606,6 +614,43 @@ def test_a_live_piece_becomes_text_for_the_call_screen_and_is_removed(
     )
     assert rows[0]["status"] == "done"
     assert len(rows[0]["text"].split()) >= 3
+    with pytest.raises(StorageException):  # removed once read
+        _admin().storage.from_("audio").download(path)
+
+
+def test_a_voice_note_is_written_into_the_doctors_notes_and_removed(
+    engine: Engine, cara: tuple[str, str, Client]
+) -> None:
+    """Owner's test team, 23 Nov: the form also takes "the doctor's voice notes"."""
+    _no_live_pieces()
+    user_id, _, client = cara
+    consultation_id = _data(
+        client.rpc(
+            "create_consultation",
+            {
+                "p_scheduled_at": "2026-11-24T09:00:00Z",
+                "p_language": "en",
+                "p_consent_recorded": False,
+            },
+        )
+    )["consultation_id"]
+    assert _data(
+        client.rpc("save_doctor_notes", {"p_consultation_id": consultation_id, "p_text": "Pale."})
+    ) == {"ok": True}
+    note_id = str(uuid.uuid4())
+    path = f"{user_id}/{consultation_id}/notes/{note_id}"
+    client.storage.from_("audio").upload(path, SPEECH, {"content-type": "audio/wav"})
+    added = _data(
+        client.rpc("add_voice_note", {"p_consultation_id": consultation_id, "p_id": note_id})
+    )
+    assert added == {"ok": True}, added
+    assert engine.run_once()
+    notes = _data(
+        client.table("doctor_notes").select("text").eq("consultation_id", consultation_id).single()
+    )["text"]
+    assert notes.startswith("Pale.\n\n") and len(notes.split()) >= 4
+    note = _data(client.table("voice_notes").select("status").eq("id", note_id).single())
+    assert note == {"status": "done"}
     with pytest.raises(StorageException):  # removed once read
         _admin().storage.from_("audio").download(path)
 

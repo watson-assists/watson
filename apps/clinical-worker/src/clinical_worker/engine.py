@@ -224,15 +224,20 @@ class Engine:
             return False
 
     def run_live_once(self) -> bool:
-        """Claims and reads one piece of a call in progress. False when none waits."""
-        answer = self.main.rpc("engine_claim_live_piece", {})
-        if not answer.get("ok"):
-            raise RuntimeError(str(answer.get("error_category")))
-        for path in answer.get("remove") or []:  # pieces set aside unread: no audio left behind
-            self._remove_live_file(path)
-        if answer.get("piece"):
-            self.process_live_piece(answer["piece"])
-            return True
+        """Claims and reads one piece of a call in progress, else one of the doctor's voice notes.
+        False when none waits."""
+        for claim, kind, process in (
+            ("engine_claim_live_piece", "piece", self.process_live_piece),
+            ("engine_claim_voice_note", "note", self.process_voice_note),
+        ):
+            answer = self.main.rpc(claim, {})
+            if not answer.get("ok"):
+                raise RuntimeError(str(answer.get("error_category")))
+            for path in answer.get("remove") or []:  # set aside unread: no audio left behind
+                self._remove_live_file(path)
+            if answer.get(kind):
+                process(answer[kind])
+                return True
         return False
 
     def run_once(self) -> bool:
@@ -267,16 +272,7 @@ class Engine:
         The piece is removed either way; the transcript after the call uses the full recordings."""
         self.last_live = time.monotonic()
         try:
-            data = self.main.download(piece["storage_path"])
-            self.settings.work_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-            with tempfile.TemporaryDirectory(dir=self.settings.work_dir) as folder:
-                path = Path(folder) / "piece"
-                path.write_bytes(data)
-                hints = self._hints(piece.get("consultation_id"))
-                heard = transcribe_track(
-                    path, piece["language"], self.settings, lambda: False, hints=hints
-                )
-            text = " ".join(s.text for s in heard.segments if not s.possibly_not_speech)
+            text = self._words(piece)
             self.main.rpc("engine_live_piece_done", {"p_id": piece["id"], "p_text": text})
             # ponytail: no form work here (17 Nov). A form fill per ten-second piece held the next
             # pieces back for minutes. Live coverage (form.coverage and
@@ -287,6 +283,31 @@ class Engine:
             self.main.rpc("engine_live_piece_failed", {"p_id": piece["id"]})
         finally:
             self._remove_live_file(piece["storage_path"])
+
+    def process_voice_note(self, note: dict[str, Any]) -> None:
+        """The doctor's spoken note (owner's test team, 23 Nov): its words join their written notes.
+        The recording is removed either way."""
+        try:
+            text = self._words(note)
+            self.main.rpc("engine_voice_note_done", {"p_id": note["id"], "p_text": text})
+        except Exception as exc:
+            log_event("voice_note.failed", exception_type=type(exc).__name__)
+            self.main.rpc("engine_voice_note_failed", {"p_id": note["id"]})
+        finally:
+            self._remove_live_file(note["storage_path"])
+
+    def _words(self, recording: dict[str, Any]) -> str:
+        """What was said in a short recording (a live piece or a voice note), in one line."""
+        data = self.main.download(recording["storage_path"])
+        self.settings.work_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=self.settings.work_dir) as folder:
+            path = Path(folder) / "recording"
+            path.write_bytes(data)
+            hints = self._hints(recording.get("consultation_id"))
+            heard = transcribe_track(
+                path, recording.get("language"), self.settings, lambda: False, hints=hints
+            )
+        return " ".join(s.text for s in heard.segments if not s.possibly_not_speech)
 
     def _hints(self, consultation_id: str | None) -> list[str]:
         """The consultation's names and the spellings its practitioner taught, for the speech

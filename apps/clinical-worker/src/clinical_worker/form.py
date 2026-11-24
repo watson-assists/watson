@@ -186,8 +186,8 @@ well, and list the D numbers an answer comes from under "documents", without the
 comes from, for example "Ferritin 9 µg/L, low (blood test of 3 Oct)"."""
 
 
-# Added only when the practitioner wrote notes of their own (owner's test team, 23 Nov: "the doctor's
-# free-form notes during the call, all considered for the diagnosis").
+# Added only when the practitioner wrote notes of their own (owner's test team, 23 Nov: "the
+# doctor's free-form notes during the call, all considered for the diagnosis").
 NOTES_RULES = """
 - The practitioner also wrote notes of their own, shown after the transcript. They are the \
 practitioner's own observations and count as if the practitioner had said them; cite no transcript \

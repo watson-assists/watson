@@ -89,3 +89,25 @@ test("during the call, the doctor has Watson fill in the form so far, and sees w
   await expect(page.getByRole("button", { name: "Fill in again" })).toBeVisible();
   expect(problems).toEqual([]);
 });
+
+test("the doctor speaks a note, and Watson's words join their notes", async ({ page, account, problems }) => {
+  await signIn(page, account);
+  const id = await newConsultation(page, "Jozef Malý");
+  await page.getByLabel("Your notes").fill("Pale.");
+  await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Speak a note" }).click();
+  await expect(page.getByText("Listening. Watson writes it down when you stop.")).toBeVisible();
+  await page.waitForTimeout(2500);
+  await page.getByRole("button", { name: /^Stop · 0:0\d$/ }).click();
+  await expect(page.getByText("Writing down your note…")).toBeVisible();
+  await expect(page.getByLabel("Your notes")).toHaveAttribute("readonly", "");
+
+  // What the live worker leaves (apps/clinical-worker: engine_voice_note_done), once the file arrived.
+  await expect.poll(() => sqlAsOwner(`select count(*) from public.voice_notes v join storage.objects o
+    on o.bucket_id = 'audio' and o.name = v.storage_path where v.consultation_id = '${id}';`)).toBe("1");
+  sqlAsOwner(`update public.voice_notes set status = 'done' where consultation_id = '${id}';
+    update public.doctor_notes set text = text || E'\\n\\nWakes at three every night.' where consultation_id = '${id}';`);
+  await expect(page.getByLabel("Your notes")).toHaveValue("Pale.\n\nWakes at three every night.", { timeout: 10_000 });
+  await expect(page.getByLabel("Your notes")).not.toHaveAttribute("readonly");
+  expect(problems).toEqual([]);
+});
