@@ -3,12 +3,13 @@
 import { Check, ChevronLeft, Download, FileText, Pencil, Printer, RefreshCw, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Notice } from "@/components/status";
 import { call, explain, isId } from "@/lib/api";
 import { clock } from "@/lib/audio";
 import { DoctorNotes } from "@/components/doctor-notes";
+import { PrescriptionsPanel } from "@/components/prescriptions-panel";
 import { DocumentViewer } from "@/components/document-viewer";
 import { openDocument, showsInPage, type Viewable } from "@/lib/documents";
 import { downloadConsultation } from "@/lib/download";
@@ -386,8 +387,12 @@ function FormView() {
           {template.sections.map((section, index) => {
             const members = section.fields.map((field) => byKey.get(field.key)).filter((answer) => answer !== undefined);
             const tucked = members.filter((answer) => isEmpty(answer) && editing !== answer.field_key);
+            // The medicines follow the general instructions: together, the prescriptions (owner, 23 Nov).
+            const medicines = section.fields.some((field) => field.key === "daily_routine")
+              || (index === template.sections.length - 1 && !template.sections.some((other) => other.fields.some((field) => field.key === "daily_routine")));
             return (
-              <section key={section.title} className="wa-sheet__section" aria-labelledby={`s-${index}`}>
+              <Fragment key={section.title}>
+              <section className="wa-sheet__section" aria-labelledby={`s-${index}`}>
                 <h2 className="wa-sheet__title" id={`s-${index}`}>{section.title}</h2>
                 {members.filter((answer) => !tucked.includes(answer)).map(card)}
                 {tucked.length > 0 && (
@@ -405,6 +410,8 @@ function FormView() {
                   </p>
                 )}
               </section>
+              {medicines && <PrescriptionsPanel consultationId={consultation.id} editable={!approved} />}
+              </Fragment>
             );
           })}
         </div>

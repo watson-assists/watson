@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { PatientDocuments, type SentDocument } from "@/components/patient-documents";
+import { PatientReport, type Report } from "@/components/patient-report";
 import { euros } from "@/lib/fee";
 import { Notice } from "@/components/status";
 import { call, explain } from "@/lib/api";
@@ -18,6 +19,8 @@ type Details = {
   booked_from: string | null;
   /** Who records the call, and what the patient answered: "agreed", "declined", or not yet. */
   practitioner: string | null; recording: "agreed" | "declined" | null;
+  /** Once the practitioner approved the form: the report and the prescriptions (owner, 23 Nov). */
+  report: Report | null;
 };
 
 /** Where a patient joins a call from the doctor's link. No account, no sign-in. */
@@ -68,11 +71,13 @@ function Join() {
   }, []);
 
   const fetchDetails = useCallback(async (): Promise<Details | "missing"> => {
-    const [result, question] = await Promise.all([
-      call<Omit<Details, "practitioner" | "recording">>("invite_details", { p_token: token }),
+    const [result, question, copy] = await Promise.all([
+      call<Omit<Details, "practitioner" | "recording" | "report">>("invite_details", { p_token: token }),
       call<Pick<Details, "practitioner" | "recording">>("recording_question", { p_token: token }),
+      call<Pick<Details, "report">>("patient_report", { p_token: token }),
     ]);
-    return result.ok && question.ok ? { ...result, practitioner: question.practitioner, recording: question.recording } : "missing";
+    return result.ok && question.ok
+      ? { ...result, practitioner: question.practitioner, recording: question.recording, report: copy.ok ? copy.report : null } : "missing";
   }, [token]);
 
   useEffect(() => {
@@ -156,7 +161,7 @@ function Join() {
         <h1 className="wa-title">Your consultation</h1>
         <p className="wa-meta">{dateTime(details.scheduled_at)} · a video call with your practitioner.</p>
       </div>
-      {mustPay ? (
+      {details.report ? <PatientReport token={token} report={details.report} cancelled={cancelled} /> : mustPay ? (
         <>
           {cancelled && !taken && <Notice title="The payment was not completed">Nothing was charged. You can try again.</Notice>}
           {taken && (

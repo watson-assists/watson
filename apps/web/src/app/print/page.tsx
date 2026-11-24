@@ -11,6 +11,9 @@ import { asClock, asDayMonthYear } from "@/lib/dates";
 import { answerText, forPatient, formBmi, formState, translated, type ConsultationRecord, type OutputLanguage } from "@/lib/export";
 import { loadRecords } from "@/lib/records";
 import { RequireSession } from "@/lib/session";
+import { supabase } from "@/lib/supabase";
+
+type Medicine = { id: string; product_name: string; quantity: number; instructions: string };
 
 // One consultation, or all of them, laid out to print or save as PDF (owner, 24 Oct: "Pdf to print
 // would make sense"). The browser's own print window prints it, or saves it as a PDF.
@@ -36,15 +39,19 @@ function PrintView() {
   const requested = params.get("language");
   const language: OutputLanguage = requested === "en" || requested === "sk" ? requested : "both";
   const [records, setRecords] = useState<ConsultationRecord[] | "failed" | null>(null);
+  const [medicines, setMedicines] = useState<Medicine[]>([]);
 
   useEffect(() => {
     if (!all && !isId(id)) return;
     let alive = true;
     loadRecords(all ? undefined : id).then((result) => alive && setRecords(result ?? "failed"));
+    // The patient's copy carries the medicines prescribed with it (owner, 23 Nov).
+    if (patient) supabase.from("prescription_items").select("id, product_name, quantity, instructions").eq("consultation_id", id)
+      .order("created_at").then(({ data }) => alive && setMedicines(data ?? []));
     return () => {
       alive = false;
     };
-  }, [id, all]);
+  }, [id, all, patient]);
 
   const back = all
     ? <Link href="/consultations/" className="wa-crumb wa-noprint"><ChevronLeft aria-hidden className="wa-icon wa-icon--sm" />Home</Link>
@@ -73,12 +80,14 @@ function PrintView() {
       {records.length === 0 && <p className="wa-text">No consultations yet.</p>}
       {patient && records.some((record) => !record.approvedAt)
         ? <Notice title="Approve the form first">The patient gets only what you approved.</Notice>
-        : records.map((record, index) => <Printed key={index} record={record} language={language} patient={patient} />)}
+        : records.map((record, index) => <Printed key={index} record={record} language={language} patient={patient} medicines={medicines} />)}
     </>
   );
 }
 
-function Printed({ record, language, patient = false }: { record: ConsultationRecord; language: OutputLanguage; patient?: boolean }) {
+function Printed({ record, language, patient = false, medicines = [] }: {
+  record: ConsultationRecord; language: OutputLanguage; patient?: boolean; medicines?: Medicine[];
+}) {
   const at = new Date(record.scheduledAt);
   const answers = new Map(record.answers.map((answer) => [answer.field_key, answer]));
   const index = patient ? null : formBmi(answers);
@@ -113,6 +122,19 @@ function Printed({ record, language, patient = false }: { record: ConsultationRe
           </dl>
         </section>
       )) : <p className="wa-text">Watson has not filled in a form for this consultation yet.</p>}
+      {medicines.length > 0 && (
+        <section className="wa-printed__section">
+          <h2 className="wa-heading">{({ en: "Medicines", sk: "Lieky", both: "Lieky / Medicines" })[language]}</h2>
+          <dl className="wa-printed__answers">
+            {medicines.map((medicine) => (
+              <div key={medicine.id}>
+                <dt>{medicine.quantity > 1 ? `${medicine.quantity} × ` : ""}{medicine.product_name}</dt>
+                <dd>{medicine.instructions || "—"}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
       {record.signatures.length > 0 ? record.signatures.map((signature) => (
         <footer key={`${signature.field_key}-${signature.signer_role}`} className="wa-printed__sign">
           <span>{signature.signer_role === "patient" ? "Patient / Pacient" : "Practitioner / Poskytovateľ"}</span>

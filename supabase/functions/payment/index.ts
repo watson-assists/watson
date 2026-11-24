@@ -1,17 +1,23 @@
-// The patient's page calls this with its link token: to start a payment, or, back from
-// Stripe, to confirm it. The token is the only credential; it names one consultation.
+// The patient's page calls this with its link token: to pay the consultation, to buy the products
+// their practitioner prescribed (owner, 23 Nov: Watson's own shop), or, back from Stripe, to confirm
+// either. The token is the only credential; it names one consultation.
 import { fulfill, stripe } from "../_shared/payment.ts";
-import { admin, reply, SITES } from "../_shared/server.ts";
+import { admin, env, reply, SITES } from "../_shared/server.ts";
 
 const TOKEN = /^[0-9a-f]{64}$/;
 const SESSION = /^cs_(test|live)_[A-Za-z0-9]{10,200}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+// Where the practices send what patients buy: the European Union and its neighbours.
+const SHIP_TO = ["AT", "BE", "BG", "CH", "CY", "CZ", "DE", "DK", "EE", "ES", "FI", "FR", "GB", "GR", "HR", "HU", "IE", "IT",
+  "LT", "LU", "LV", "MT", "NL", "NO", "PL", "PT", "RO", "SE", "SI", "SK"] as const;
+type Item = { name: string; quantity: number; price_cents: number; photo_path: string | null };
 
 Deno.serve(async (request) => {
   const origin = request.headers.get("Origin");
   if (request.method === "OPTIONS") return reply(origin, 204, null);
   if (request.method !== "POST" || !origin || !SITES.includes(origin)) return reply(origin, 403, { error: "FORBIDDEN" });
 
-  let input: { token?: unknown; session_id?: unknown };
+  let input: { token?: unknown; session_id?: unknown; items?: unknown };
   try {
     input = await request.json();
   } catch {
@@ -29,6 +35,27 @@ Deno.serve(async (request) => {
       // Back from Stripe: fulfil here as well as in the webhook, as Stripe recommends.
       if (typeof input.session_id !== "string" || !SESSION.test(input.session_id)) return reply(origin, 400, { error: "VALIDATION" });
       return reply(origin, 200, { paid: await fulfill(input.session_id, consultation.id) });
+    }
+    if (input.items !== undefined) {
+      const ids = Array.isArray(input.items) && input.items.length >= 1 && input.items.length <= 20
+        && input.items.every((id) => typeof id === "string" && UUID.test(id)) ? input.items as string[] : null;
+      if (!ids) return reply(origin, 400, { error: "VALIDATION" });
+      const { data: order } = await admin.rpc("open_shop_order", { p_token: token, p_item_ids: ids });
+      if (!order?.ok) return reply(origin, 409, { error: order?.error_category ?? "VALIDATION" });
+      const photo = (path: string | null) => path ? [`${env("SUPABASE_URL")}/storage/v1/object/public/shop/${path}`] : undefined;
+      const session = await stripe().checkout.sessions.create({
+        mode: "payment",
+        line_items: (order.items as Item[]).map((item) => ({
+          quantity: item.quantity,
+          price_data: { currency: "eur", unit_amount: item.price_cents, product_data: { name: item.name, images: photo(item.photo_path) } },
+        })),
+        shipping_address_collection: { allowed_countries: [...SHIP_TO] },
+        client_reference_id: consultation.id,
+        metadata: { consultation_id: consultation.id, order_id: order.order_id },
+        success_url: `${origin}/join/?t=${token}&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/join/?t=${token}&cancelled=1`,
+      });
+      return reply(origin, 200, { url: session.url });
     }
     if (consultation.fee_cents === null) return reply(origin, 409, { error: "NO_FEE" });
     if (consultation.paid_at) return reply(origin, 409, { error: "ALREADY_PAID" });

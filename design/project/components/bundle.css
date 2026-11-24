@@ -254,6 +254,19 @@ body {
 @media (min-width: 1000px) { .wa-room { grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); } }
 .wa-livetext { display: grid; gap: var(--space-2); align-content: start; padding: var(--space-4); background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius-paper); }
 .wa-livetext__lines { display: grid; gap: var(--space-3); margin: 0; padding: 0; list-style: none; max-height: 60vh; overflow-y: auto; }
+/* A form without a recording shows the doctor's notes beside it; with no notes, nothing at all. */
+.wa-review__aside:empty { display: none; }
+/* ---------- Shop (owner, 23 Nov): the practice's products, prescriptions and orders ---------- */
+.wa-shop { display: grid; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+.wa-shop__item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-3) var(--space-4); align-items: start; padding: var(--space-3) 0; border-top: 1px solid var(--rule); }
+.wa-shop__item:first-child { border-top: 0; }
+.wa-shop__item:not(:has(> .wa-shop__photo)) { grid-template-columns: minmax(0, 1fr) auto; }
+.wa-shop__item--hidden { opacity: 0.6; }
+.wa-shop__photo { display: block; width: 64px; height: 64px; border-radius: var(--radius-control); background: var(--paper-sunk); object-fit: cover; }
+.wa-shop__text { display: grid; gap: 2px; min-width: 0; }
+.wa-shop__text > p { margin: 0; }
+.wa-shop__name { margin: 0; font: 600 16px/24px var(--font-text); color: var(--ink); }
+@media (max-width: 600px) { .wa-shop__item { grid-template-columns: auto minmax(0, 1fr); } .wa-shop__item > :last-child:not(.wa-shop__text) { grid-column: 1 / -1; } }
 .wa-room__side { display: grid; gap: var(--space-4); align-content: start; min-width: 0; }
 .wa-sofar { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; font: 400 15px/22px var(--font-text); color: var(--ink); }
 .wa-livetext__when { margin-left: var(--space-2); font: 400 12px/20px var(--font-mono); color: var(--ink-muted); font-variant-numeric: tabular-nums; }

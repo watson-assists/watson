@@ -31,7 +31,8 @@ for (const file of htmlFiles("out")) {
     "default-src 'self'",
     `script-src 'self' ${[...hashes].join(" ")}`.trim(),
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    // Product photos from the practice's shop, in the database's public storage (owner, 23 Nov).
+    `img-src 'self' data: blob: ${api}/storage/v1/object/public/shop/`,
     "font-src 'self'",
     `media-src 'self' blob: ${api}`,
     `connect-src 'self' ${api} ${realtime}`,

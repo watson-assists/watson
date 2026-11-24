@@ -10,6 +10,7 @@ import { GOOGLE_CALENDAR } from "@/lib/features";
 import { Notice } from "@/components/status";
 import { DayAgenda, WeekGrid, WeekKeys } from "@/components/week-grid";
 import { FormTemplateSettings } from "@/components/form-template-settings";
+import { ShopSettings } from "@/components/shop-settings";
 import type { Week } from "@/lib/booking";
 import { RequireSession } from "@/lib/session";
 import { call } from "@/lib/api";
@@ -83,6 +84,7 @@ function Calendar() {
       <FormTemplateSettings />
       <BookingSettings page={week.page} quietSave={GOOGLE_CALENDAR && !week.google} onSaved={load}
         aside={week.google ? <GooglePanel onDisconnected={load} /> : undefined} />
+      <ShopSettings />
     </>
   );
 }
