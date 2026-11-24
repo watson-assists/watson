@@ -10,6 +10,7 @@ import { call, FIELD_MESSAGE } from "@/lib/api";
 import { byDay, clockTime, initials, localDay, viewerZone, WEEKDAY_SHORT, zoneName, type PublicPage } from "@/lib/booking";
 import { euros } from "@/lib/fee";
 import { payment } from "@/lib/payment";
+import { useSession } from "@/lib/session";
 import { dateTime, LANGUAGE_LABEL, type ConsultationLanguage } from "@/lib/status";
 
 // A patient books a time with one practitioner (design system: ScreenBook, ScreenPhoneBook,
@@ -170,15 +171,22 @@ function Details({ practitioner: page, time }: { practitioner: PublicPage; time:
   const [remind, setRemind] = useState(true);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<{ field?: string; message: string } | null>(null);
-  const byPhone = contact.trim() !== "" && !contact.includes("@");
+  // A signed-in patient books with the number or email they verified (owner, 24 Nov: "you have my
+  // phone number, and yet you ask for it again"); another one only if they choose to.
+  const session = useSession();
+  const verified = session.status === "signed-in" && session.roles?.includes("patient")
+    ? (session.user.phone ? `+${session.user.phone.replace(/^\+/, "")}` : session.user.email ?? null) : null;
+  const [another, setAnother] = useState(false);
+  const given = verified && !another ? verified : contact;
+  const byPhone = given.trim() !== "" && !given.includes("@");
 
   async function book() {
     setProblem(null);
     if (!name.trim()) return setProblem({ field: "name", message: FIELD_MESSAGE.name });
-    if (!contact.trim()) return setProblem({ field: "contact", message: FIELD_MESSAGE.contact });
+    if (!given.trim()) return setProblem({ field: "contact", message: FIELD_MESSAGE.contact });
     setBusy(true);
     const outcome = await call<{ token: string }>("book_time", {
-      p_slug: page.slug, p_starts_at: time, p_name: name, p_contact: contact, p_language: language, p_remind_whatsapp: byPhone && remind,
+      p_slug: page.slug, p_starts_at: time, p_name: name, p_contact: given, p_language: language, p_remind_whatsapp: byPhone && remind,
     });
     if (!outcome.ok) {
       setBusy(false);
@@ -214,13 +222,23 @@ function Details({ practitioner: page, time }: { practitioner: PublicPage; time:
             onChange={(e) => setName(e.target.value)} />
           <FieldError id="name-error" message={error("name")} />
         </div>
-        <div className="wa-field">
-          <label className="wa-label" htmlFor="contact">Phone or email</label>
-          <p className="wa-hint" id="contact-hint">Your practitioner keeps your documents under this. With a phone number, Watson can remind you on WhatsApp.</p>
-          <input id="contact" className="wa-input" autoComplete="tel" value={contact} aria-invalid={Boolean(error("contact"))}
-            aria-describedby="contact-hint contact-error" onChange={(e) => setContact(e.target.value)} />
-          <FieldError id="contact-error" message={error("contact")} />
-        </div>
+        {verified && !another ? (
+          <div className="wa-field">
+            <p className="wa-label" style={{ margin: 0 }}>Phone or email</p>
+            <p className="wa-text" style={{ margin: 0 }}><strong>{verified}</strong>, from your account.</p>
+            <div className="wa-actions">
+              <button type="button" className="wa-button wa-button--quiet wa-button--small" onClick={() => setAnother(true)}>Use another</button>
+            </div>
+          </div>
+        ) : (
+          <div className="wa-field">
+            <label className="wa-label" htmlFor="contact">Phone or email</label>
+            <p className="wa-hint" id="contact-hint">Your practitioner keeps your documents under this. With a phone number, Watson can remind you on WhatsApp.</p>
+            <input id="contact" className="wa-input" autoComplete="tel" value={contact} aria-invalid={Boolean(error("contact"))}
+              aria-describedby="contact-hint contact-error" onChange={(e) => setContact(e.target.value)} />
+            <FieldError id="contact-error" message={error("contact")} />
+          </div>
+        )}
         <div className="wa-field">
           <label className="wa-label" htmlFor="language">Language for the consultation</label>
           <div className="wa-select">

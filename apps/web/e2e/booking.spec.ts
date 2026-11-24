@@ -1,4 +1,5 @@
 import { expect, signIn, test } from "./account";
+import { adminClient, browserClient, localStack, PASSWORD, sqlAsOwner } from "../tests/local-stack";
 
 test("warns the doctor that changed booking hours are not live until saved", async ({ page, account }) => {
   await signIn(page, account);
@@ -75,4 +76,50 @@ test("a practitioner opens hours, a patient books one, the practitioner sees it"
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Practice" }).click();
   await expect(page.locator(".wa-block--booked", { hasText: "Jana Nováková" }).first()).toBeVisible();
   expect(problems).toEqual([]);
+});
+
+// Owner, 24 Nov: "I've already logged in, meaning you have my phone number, and yet to make an
+// appointment you ask for my number again." A signed-in patient books with what they verified.
+test("a signed-in patient books without typing their phone or email again", async ({ browser, account }) => {
+  const stack = localStack();
+  const doctor = browserClient(stack);
+  await doctor.auth.signInWithPassword({ email: account.email, password: account.password });
+  const every = Object.fromEntries(["1", "2", "3", "4", "5", "6", "7"].map((day) => [day, ["06:00", "22:00"]]));
+  const { data: page } = await doctor.rpc("save_booking_page", {
+    p_display_name: "Dr. Eva Test", p_offer: "", p_about: "", p_languages: ["en"], p_hours: every,
+    p_length_minutes: 45, p_gap_minutes: 15, p_fee_cents: null as unknown as number, // free: no payment step
+  });
+  const slug = (page as { slug: string }).slug;
+  expect(slug).toBeTruthy();
+
+  // A patient account, verified by its email code (as the patient-otp function leaves it).
+  const email = `patient-${crypto.randomUUID().slice(0, 8)}@watson.test`;
+  const created = await adminClient(stack).auth.admin.createUser({ email, password: PASSWORD, email_confirm: true });
+  await adminClient(stack).rpc("provision_patient_role_after_otp" as never, { p_user_id: created.data.user!.id } as never);
+  const patientClient = browserClient(stack);
+  const { data: signedIn } = await patientClient.auth.signInWithPassword({ email, password: PASSWORD });
+  const payload = signedIn.session!.access_token.split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/");
+  const sessionId = JSON.parse(atob(payload.padEnd(Math.ceil(payload.length / 4) * 4, "="))).session_id as string;
+  await adminClient(stack).rpc("register_patient_otp_session" as never, {
+    p_user_id: created.data.user!.id, p_session_id: sessionId, p_verified_email: email, p_verified_phone: null,
+  } as never);
+
+  const context = await browser.newContext();
+  const key = `sb-${new URL(stack.url).hostname.split(".")[0]}-auth-token`;
+  await context.addInitScript(([name, value]) => localStorage.setItem(name, value), [key, JSON.stringify(signedIn.session)] as const);
+  const patient = await context.newPage();
+  await patient.goto(`/book/?p=${slug}`);
+  await expect(patient.getByRole("link", { name: "Your account" })).toBeVisible();
+  const chooser = patient.getByRole("region", { name: "Choose a time" });
+  await chooser.locator(".wa-day:not(:disabled)").first().click();
+  await chooser.getByRole("group").getByRole("button").first().click();
+  await patient.getByRole("link", { name: "Continue" }).click();
+  await expect(patient.getByText(`${email}, from your account.`)).toBeVisible();
+  await expect(patient.getByRole("textbox", { name: "Phone or email" })).toHaveCount(0);
+  await patient.getByLabel("Your name").fill("Jana Nováková");
+  await patient.getByRole("button", { name: "Book this time" }).click();
+  await expect(patient).toHaveURL(/\/join\/\?t=[0-9a-f]{64}$/);
+  const token = new URL(patient.url()).searchParams.get("t")!;
+  expect(sqlAsOwner(`select patient_claim_email from public.consultations where invite_token = '${token}';`)).toBe(email);
+  await context.close();
 });
