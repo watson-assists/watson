@@ -107,6 +107,28 @@ export function bmi(height: string | null | undefined, weight: string | null | u
 export const formBmi = (answers: ReadonlyMap<string, FormAnswer>) =>
   bmi(answerText(answers.get("height")), answerText(answers.get("weight")));
 
+// The three parts of the record (owner, 23 Nov): the intake (Dr. Robin's sheet) stays with the doctor;
+// the report (complaints, diagnosis, treatment, review) and the prescriptions (general instructions)
+// go to the patient. A section holding one of these questions goes to the patient whole.
+const PATIENT_SECTIONS = new Set(["assessment", "therapies", "daily_routine"]);
+// From the intake, only the main complaints; from the doctor's part, never their safety notes.
+const PATIENT_FROM_INTAKE = new Set(["main_concern", "history_of_concern"]);
+const DOCTOR_ONLY = new Set(["safety"]);
+
+/** What the patient gets: never the intake, the conversation, private notes or the doctor's safety notes. */
+export function forPatient(template: FormTemplate): FormTemplate {
+  return {
+    ...template,
+    sections: template.sections.flatMap((section) => {
+      const whole = section.fields.some((field) => PATIENT_SECTIONS.has(field.key));
+      const fields = section.fields.filter((field) => field.mode !== "manual" && !DOCTOR_ONLY.has(field.key)
+        && field.value_type !== "signature" && field.value_type !== "attestation"
+        && (whole || PATIENT_FROM_INTAKE.has(field.key)));
+      return fields.length ? [{ ...section, fields }] : [];
+    }),
+  };
+}
+
 /** "Approved 27/10/2026 11:30", "Draft, not yet approved" or "No form yet". */
 export const formState = (record: ConsultationRecord) =>
   !record.template ? "No form yet" : record.approvedAt ? `Approved ${when(record.approvedAt)}` : "Draft, not yet approved";

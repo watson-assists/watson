@@ -186,6 +186,16 @@ well, and list the D numbers an answer comes from under "documents", without the
 comes from, for example "Ferritin 9 µg/L, low (blood test of 3 Oct)"."""
 
 
+# Added only when the practitioner wrote notes of their own (owner's test team, 23 Nov: "the doctor's
+# free-form notes during the call, all considered for the diagnosis").
+NOTES_RULES = """
+- The practitioner also wrote notes of their own, shown after the transcript. They are the \
+practitioner's own observations and count as if the practitioner had said them; cite no transcript \
+lines for what comes only from the notes. Weigh them first for fields marked SUGGEST."""
+# A consultation without a recording, or a call not yet transcribed: the transcript may be empty.
+NO_TRANSCRIPT = "(none: nothing was recorded)"
+
+
 def document_lines(documents: list[dict[str, Any]]) -> list[DocumentLine]:
     """The patient's documents, newest first, as numbered lines, up to DOCUMENT_CHARACTERS."""
     lines: list[DocumentLine] = []
@@ -222,6 +232,7 @@ def prompt(
     lines: list[Line],
     language: str,
     documents: list[DocumentLine] | None = None,
+    notes: str = "",
 ) -> tuple[str, str]:
     fields = "\n".join(
         f"{section.title}:\n"
@@ -236,12 +247,15 @@ def prompt(
     system = SYSTEM.format(language=LANGUAGE_NAMES.get(language, "the language of the transcript"))
     if any(field.value_type is not None for field in template.fields):
         system += TYPED_RULES
-    user = f"Form fields:\n{fields}\n\nTranscript:\n{numbered(lines)}"
+    user = f"Form fields:\n{fields}\n\nTranscript:\n{numbered(lines) or NO_TRANSCRIPT}"
     if documents:
         system += DOCUMENT_RULES
         user += "\n\nDocuments the patient sent:\n" + "\n".join(
             f"[D{d.number}] {d.file_name}, page {d.page}: {d.text}" for d in documents
         )
+    if notes.strip():
+        system += NOTES_RULES
+        user += "\n\nThe practitioner's notes:\n" + notes.strip()
     return system, user
 
 
@@ -450,8 +464,9 @@ def fill(
     language: str,
     stop: Callable[[], bool] = lambda: False,
     documents: list[DocumentLine] | None = None,
+    notes: str = "",
 ) -> list[Answer]:
-    system, user = prompt(template, lines, language, documents)
+    system, user = prompt(template, lines, language, documents, notes)
     raw = model.complete(system, user, schema(template, bool(documents)), stop)
     return parse(raw, template, lines, documents)
 

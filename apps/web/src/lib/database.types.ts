@@ -357,6 +357,13 @@ export type Database = {
           },
         ]
       }
+      doctor_notes: {
+        Row: { consultation_id: string; text: string; updated_at: string }
+        ComputedFields: never
+        Insert: { consultation_id: string; text?: string; updated_at?: string }
+        Update: { consultation_id?: string; text?: string; updated_at?: string }
+        Relationships: []
+      }
       engines: {
         Row: {
           can_caption: boolean
@@ -491,10 +498,11 @@ export type Database = {
           id: string
           metrics: NonNullable<Json>
           parent_form_id: string | null
+          preview: Json | null
           queued_at: string
           revision_kind: string
           status: Database["public"]["Enums"]["job_status"]
-          transcript_id: string
+          transcript_id: string | null
         }
         ComputedFields: never
         Insert: {
@@ -509,10 +517,11 @@ export type Database = {
           id?: string
           metrics?: NonNullable<Json>
           parent_form_id?: string | null
+          preview?: Json | null
           queued_at?: string
           revision_kind?: string
           status?: Database["public"]["Enums"]["job_status"]
-          transcript_id: string
+          transcript_id?: string | null
         }
         Update: {
           attempt?: number
@@ -526,10 +535,11 @@ export type Database = {
           id?: string
           metrics?: NonNullable<Json>
           parent_form_id?: string | null
+          preview?: Json | null
           queued_at?: string
           revision_kind?: string
           status?: Database["public"]["Enums"]["job_status"]
-          transcript_id?: string
+          transcript_id?: string | null
         }
         Relationships: [
           {
@@ -756,14 +766,14 @@ export type Database = {
           created_at: string
           form_template_version_id: string | null
           id: string
-          job_id: string
+          job_id: string | null
           parent_form_id: string | null
           revision_kind: string
           revision_number: number
           status: string
           template: NonNullable<Json>
           template_hash: string
-          transcript_id: string
+          transcript_id: string | null
         }
         ComputedFields: never
         Insert: {
@@ -773,14 +783,14 @@ export type Database = {
           created_at?: string
           form_template_version_id?: string | null
           id?: string
-          job_id: string
+          job_id?: string | null
           parent_form_id?: string | null
           revision_kind?: string
           revision_number: number
           status?: string
           template: NonNullable<Json>
           template_hash?: never
-          transcript_id: string
+          transcript_id?: string | null
         }
         Update: {
           approved_at?: string | null
@@ -789,14 +799,14 @@ export type Database = {
           created_at?: string
           form_template_version_id?: string | null
           id?: string
-          job_id?: string
+          job_id?: string | null
           parent_form_id?: string | null
           revision_kind?: string
           revision_number?: number
           status?: string
           template?: NonNullable<Json>
           template_hash?: never
-          transcript_id?: string
+          transcript_id?: string | null
         }
         Relationships: [
           {
@@ -1603,6 +1613,10 @@ export type Database = {
       engine_claim_form_job: { Args: Record<PropertyKey, never>; Returns: Json }
       engine_claim_job: { Args: Record<PropertyKey, never>; Returns: Json }
       engine_claim_live_piece: { Args: Record<PropertyKey, never>; Returns: Json }
+      engine_complete_call_fill: {
+        Args: { p_answers: Json; p_attempt: number; p_job_id: string; p_metrics?: Json }
+        Returns: Json
+      }
       engine_complete_document: {
         Args: { p_attempt: number; p_document_id: string; p_pages: string[] }
         Returns: Json
@@ -1654,6 +1668,7 @@ export type Database = {
       engine_run_started: { Args: Record<PropertyKey, never>; Returns: Json }
       engine_status: { Args: Record<PropertyKey, never>; Returns: Json }
       fill_form_again: { Args: { p_consultation_id: string }; Returns: Json }
+      fill_form_during_call: { Args: { p_consultation_id: string }; Returns: Json }
       find_practitioners: { Args: Record<PropertyKey, never>; Returns: Json }
       google_disconnect: { Args: { p_practitioner: string }; Returns: Json }
       google_event_written: { Args: { p_consultation: string; p_event_id: string }; Returns: Json }
@@ -1770,6 +1785,7 @@ export type Database = {
         }
         Returns: Json
       }
+      save_doctor_notes: { Args: { p_consultation_id: string; p_text: string }; Returns: Json }
       save_booking_page: {
         Args: {
           p_about: string
@@ -1805,6 +1821,7 @@ export type Database = {
         Returns: Json
       }
       start_form: { Args: { p_consultation_id: string }; Returns: Json }
+      start_form_without_recording: { Args: { p_by_watson: boolean; p_consultation_id: string }; Returns: Json }
       start_transcription: { Args: { p_consultation_id: string }; Returns: Json }
       use_watson_form: { Args: Record<PropertyKey, never>; Returns: Json }
       verify_audit_chain: { Args: { p_consultation_id: string }; Returns: boolean }

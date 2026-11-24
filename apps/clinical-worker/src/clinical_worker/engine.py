@@ -407,6 +407,7 @@ class Engine:
                 job.get("language") or "",
                 heartbeat.stopped.is_set,
                 documents,
+                str(job.get("notes") or ""),
             )
             answered = sum(1 for a in answers if a.state != "unanswered")
             metrics = {
@@ -416,8 +417,10 @@ class Engine:
                 "completion_tokens": model.last_usage.get("completion_tokens"),
                 "answered_field_count": answered,
             }
+            # During the call (owner's test team, 23 Nov) the answers are a preview beside the call.
+            during_call = job.get("revision_kind") == "during_call"
             answer = self.main.rpc(
-                "engine_complete_form_job",
+                "engine_complete_call_fill" if during_call else "engine_complete_form_job",
                 {
                     "p_job_id": job["job_id"],
                     "p_attempt": job["attempt"],

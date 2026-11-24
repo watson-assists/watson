@@ -38,6 +38,7 @@ const MESSAGE: Record<string, string> = {
   FORM_RECONCILIATION_REQUIRED: "Review every difference between live coverage and the final transcript before approval.",
   ENGINE_CAPABILITY_MISSING: "This worker is not authorized for that processing capability.",
   FORM_JOB_ACTIVE: "Another form revision is already being prepared.",
+  NOTHING_TO_FILL: "Watson has nothing to fill the form in from yet: write your notes, or add the patient's documents.",
   FORM_TEMPLATE_MISSING: "Your form is not set up yet, so there is nothing to fill in.",
   NOT_SIGNED_IN: "You are signed out. Sign in again.",
   PAYMENT_REQUIRED: "Pay for the consultation first, then join the call.",

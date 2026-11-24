@@ -7,6 +7,8 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { CopyButton } from "@/components/copy-button";
 import { CorrectableLine } from "@/components/correctable-line";
+import { DoctorNotes } from "@/components/doctor-notes";
+import { FormSoFar } from "@/components/form-so-far";
 import { Notice } from "@/components/status";
 import { call as rpc } from "@/lib/api";
 import { clock } from "@/lib/audio";
@@ -214,7 +216,7 @@ function Room({ userId }: { userId: string }) {
       <div className="wa-pagehead">
         <div className="wa-pagehead__text">
           <h1 className="wa-title">{consultation.patients?.name ?? consultation.patient_claim_name ?? consultation.synthetic_patient_ref}</h1>
-          <p className="wa-meta">Video call. If the patient agrees, both voices are recorded, with a live transcript beside the video; the full transcript follows when you end the call.</p>
+          <p className="wa-meta">Video call. If the patient agrees, both voices are recorded, with a live transcript beside the video; the full transcript and the form follow when you end the call.</p>
         </div>
       </div>
       <div className="wa-room">
@@ -267,12 +269,14 @@ function Room({ userId }: { userId: string }) {
             {problem}
           </Notice>
         )}
+        <DoctorNotes consultationId={id} editable look="side" />
       </div>
       {called && (
+        <div className="wa-room__side">
         <aside className="wa-livetext" aria-labelledby="live-title">
           <h2 className="wa-heading" id="live-title" style={{ color: "var(--ink)" }}>Live transcript</h2>
           <p className="wa-hint">
-            {declined ? "The patient chose not to be recorded, so this call has no transcript."
+            {declined ? "The patient chose not to be recorded, so this call has no transcript. Write what matters in your notes: Watson fills in the form from them after the call."
               : lines.length ? "A few seconds behind. The full transcript follows when you end the call."
               : recording ? "Starting Watson's engine… the first words appear in about half a minute."
               : "Starts when the patient joins and agrees to recording."}
@@ -295,6 +299,8 @@ function Room({ userId }: { userId: string }) {
             </Notice>
           )}
         </aside>
+        <FormSoFar consultationId={id} templateVersionId={consultation.form_template_version_id} />
+        </div>
       )}
       </div>
     </>

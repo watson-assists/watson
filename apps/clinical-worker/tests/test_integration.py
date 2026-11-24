@@ -388,6 +388,40 @@ def test_a_transcript_goes_on_to_a_form_the_practitioner_checks_and_approves(
     assert review("age", "reject")["error_category"] == "INVALID_STATE_TRANSITION"
 
 
+def test_a_form_filled_during_the_call_is_a_preview_beside_it_and_the_call_goes_on(
+    engine: Engine, dana: tuple[str, str, Client]
+) -> None:
+    """Owner's test team, 23 Nov: "the form filled alongside the conversation"."""
+    client = dana[2]
+    consultation_id = _data(
+        client.rpc(
+            "create_consultation",
+            {"p_scheduled_at": "2026-11-24T09:00:00Z", "p_language": "en", "p_consent_recorded": True},
+        )
+    )["consultation_id"]
+    subprocess.run(
+        ["docker", "exec", "-i", "supabase_db_watson", "psql", "-U", "postgres", "-q"],
+        # The id is a UUID the database just returned, not outside input.
+        input="insert into public.live_pieces"  # noqa: S608
+        " (consultation_id, speaker, seq, offset_seconds, storage_path, status, text)"
+        f" values ('{consultation_id}', 'patient', 0, 0, 'x/{consultation_id}/live/patient-0',"
+        " 'done', 'I sleep badly for three weeks.');",
+        text=True,
+        check=True,
+        capture_output=True,
+    )
+    assert _data(client.rpc("fill_form_during_call", {"p_consultation_id": consultation_id}))["ok"]
+    engine.form_model = StandInModel()  # type: ignore[assignment]
+    assert engine.run_once()
+    job = _data(
+        client.table("form_jobs").select("status, preview").eq("consultation_id", consultation_id)
+    )
+    assert job == [
+        {"status": "completed", "preview": [{"key": "age", "text": "Sleeps badly for three weeks."}]}
+    ]
+    assert _status(dana, consultation_id) == "ready_for_audio"
+
+
 def test_a_form_that_cannot_be_filled_fails_and_can_be_tried_again(
     engine: Engine, dana: tuple[str, str, Client], monkeypatch: pytest.MonkeyPatch
 ) -> None:

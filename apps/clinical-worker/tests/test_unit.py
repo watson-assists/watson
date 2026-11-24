@@ -326,6 +326,19 @@ def test_a_form_without_documents_is_asked_exactly_as_before() -> None:
     ]
 
 
+def test_the_doctors_notes_are_read_as_their_own_words_and_a_form_needs_no_recording() -> None:
+    from clinical_worker.form import NO_TRANSCRIPT, NOTES_RULES, Line, Template, prompt
+
+    template = Template.model_validate(SMALL_TEMPLATE)
+    lines = [Line(0, "patient", "I sleep badly.")]
+    assert prompt(template, lines, "en", None, "  ") == prompt(template, lines, "en")
+    system, user = prompt(template, lines, "en", None, " Tongue coated. Vata high? ")
+    assert system.endswith(NOTES_RULES)
+    assert user.endswith("The practitioner's notes:\nTongue coated. Vata high?")
+    system, user = prompt(template, [], "en", None, "Wakes at three.")
+    assert f"Transcript:\n{NO_TRANSCRIPT}\n" in user
+
+
 def test_document_numbers_become_quotes_and_unknown_ones_are_dropped() -> None:
     from clinical_worker.form import DocumentLine, Line, Quote, Template, parse
 

@@ -1,7 +1,7 @@
 // What a practitioner takes out of Watson (owner, 24 Oct: PDF or Excel, one patient or all of them).
 // The form in its own order with the answers as the practitioner left them; never the conversation (owner, 23 Nov).
 import { describe, expect, it } from "vitest";
-import { allPatientsRows, answerText, bmi, formRows, isTypedFormTemplate, type ConsultationRecord } from "./export";
+import { allPatientsRows, answerText, bmi, forPatient, formRows, isTypedFormTemplate, type ConsultationRecord } from "./export";
 
 const template = { title: "Ayurvedic consultation", sections: [
   { title: "About the patient", fields: [{ key: "age", label: "Age" }, { key: "work", label: "Work" }] },
@@ -98,5 +98,25 @@ describe("the BMI, from height and weight as they were said", () => {
     expect(bmi("5 ft 8", "150 lb")).toBeNull();
     expect(bmi("about average", "68 kg")).toBeNull();
     expect(bmi("17 cm", "68 kg")).toBeNull();
+  });
+});
+
+// Owner, 23 Nov: the intake stays with the doctor; the report and the prescriptions go to the patient.
+describe("what the patient gets", () => {
+  it("is their main complaints, the diagnosis, treatment and instructions; never the intake, safety or private notes", () => {
+    const full = { title: "Ayurvedic consultation", sections: [
+      { title: "About the patient", fields: [{ key: "age", label: "Age" }, { key: "weight", label: "Weight" }] },
+      { title: "Present condition", fields: [{ key: "main_concern", label: "Main concern" }, { key: "better_worse", label: "Better or worse" }] },
+      { title: "Assessment", fields: [{ key: "assessment", label: "Assessment", mode: "suggest" as const }, { key: "safety", label: "Safety", mode: "suggest" as const }] },
+      { title: "Recommendation", fields: [{ key: "therapies", label: "Therapies" }, { key: "review", label: "Review" }] },
+      { title: "General instructions", fields: [{ key: "daily_routine", label: "Daily routine" }] },
+      { title: "For you only", fields: [{ key: "private_notes", label: "Private notes", mode: "manual" as const }] },
+    ] };
+    expect(forPatient(full).sections.map((section) => [section.title, section.fields.map((field) => field.key)])).toEqual([
+      ["Present condition", ["main_concern"]],
+      ["Assessment", ["assessment"]],
+      ["Recommendation", ["therapies", "review"]],
+      ["General instructions", ["daily_routine"]],
+    ]);
   });
 });

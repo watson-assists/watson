@@ -1,10 +1,11 @@
 "use client";
 
-import { Archive, ChevronLeft, Pencil, Video } from "lucide-react";
+import { Archive, ChevronLeft, ClipboardList, Pencil, PenLine, Video } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState, type FormEvent } from "react";
 import { AppShell } from "@/components/app-shell";
+import { DoctorNotes } from "@/components/doctor-notes";
 import { DocumentsPanel } from "@/components/documents-panel";
 import { WhatsAppPanel } from "@/components/whatsapp-panel";
 import { FormPanel } from "@/components/form-panel";
@@ -59,15 +60,17 @@ const back = (
 );
 
 /** What each of the four steps says under its bar. */
-function stepLines({ consultation, tracks }: Loaded): string[] {
+function stepLines({ consultation, tracks, hasTranscript }: Loaded): string[] {
   const { stages } = summarise(consultation.status);
+  // A form made without a recording (owner's test team, 23 Nov): nothing was recorded or transcribed.
+  const unrecorded = stages[1] === "done" && tracks.length === 0 && !hasTranscript;
   return [
     consultation.consent_withdrawn_at ? `Withdrawn ${dayMonth(consultation.consent_withdrawn_at)}`
       : consultation.patient_recording === "declined" ? "Patient said no to recording"
       : consultation.patient_recording === "agreed" ? `Patient agreed ${dayMonth(consultation.patient_recording_at!)}`
       : consultation.consent_recorded_at ? `Recorded ${dayMonth(consultation.consent_recorded_at)}` : "Not recorded yet",
-    stages[1] === "done" ? "Recorded" : stages[1] === "current" && tracks.length > 0 ? "Saved in part" : "Not yet",
-    { current: consultation.status === "transcription_processing" ? "Transcribing" : "Ready to start", failed: "Failed", done: "Done" }[
+    unrecorded ? "Not recorded" : stages[1] === "done" ? "Recorded" : stages[1] === "current" && tracks.length > 0 ? "Saved in part" : "Not yet",
+    unrecorded ? "No transcript" : { current: consultation.status === "transcription_processing" ? "Transcribing" : "Ready to start", failed: "Failed", done: "Done" }[
       stages[2] as "current" | "failed" | "done"] ?? "Not yet",
     ({ transcript_ready: "Not set up", transcript_reviewed: "Not set up", extraction_processing: "Filling in",
       extraction_failed: "Failed", draft_ready: "Ready to check", under_review: "Checking", approved: "Approved" } as Record<string, string>)[
@@ -82,6 +85,7 @@ function ConsultationView({ userId }: { userId: string }) {
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const router = useRouter();
 
   const fetchAll = useCallback(async (): Promise<Loaded | "missing" | "failed"> => {
     const [consultation, tracks, transcript] = await Promise.all([
@@ -189,6 +193,19 @@ function ConsultationView({ userId }: { userId: string }) {
     setConfirmArchive(false);
   });
 
+  // No recording: Watson fills in the form from the notes and documents, or the doctor writes it.
+  const withoutRecording = (byWatson: boolean) => run(async () => {
+    const outcome = await call<{ id: string }>("start_form_without_recording", { p_consultation_id: consultation.id, p_by_watson: byWatson });
+    if (!outcome.ok) {
+      return setProblem(outcome.error_category === "NOTHING_TO_FILL"
+        ? "Write your notes first, or add the patient\u2019s documents: Watson fills in the form from them." : explain(outcome.error_category));
+    }
+    if (!byWatson) router.push(`/form/?id=${consultation.id}`);
+  });
+  const unrecorded = ["consent_pending", "ready_for_audio"].includes(status) && tracks.length === 0;
+  const declined = consultation.patient_recording === "declined";
+  const notes = <DoctorNotes key={status} consultationId={consultation.id} editable={!["approved", "corrected"].includes(status)} />;
+
   const canWithdraw = consultation.consent_recorded_at !== null && WITHDRAWABLE.includes(status);
 
   return (
@@ -273,6 +290,24 @@ function ConsultationView({ userId }: { userId: string }) {
         </section>
       )}
 
+      {unrecorded && (
+        <section className="wa-panel" aria-labelledby="unrecorded-title">
+          <h2 className="wa-heading" id="unrecorded-title">{declined ? "Not recorded" : "Without a recording"}</h2>
+          <p className="wa-text">
+            {declined ? "The patient chose not to be recorded. Write your notes below, then have Watson fill in the form from them and the patient\u2019s documents, or write the form yourself."
+              : "Met the patient in person, or the call was not recorded? Watson fills in the form from your notes and the patient\u2019s documents, or you write it yourself."}
+          </p>
+          <div className="wa-actions">
+            <button type="button" className={`wa-button ${declined ? "wa-button--primary" : "wa-button--secondary"}`} disabled={busy}
+              onClick={() => withoutRecording(true)}><ClipboardList aria-hidden className="wa-icon" />Fill in from my notes</button>
+            <button type="button" className="wa-button wa-button--secondary" disabled={busy}
+              onClick={() => withoutRecording(false)}><PenLine aria-hidden className="wa-icon" />Write it myself</button>
+          </div>
+        </section>
+      )}
+
+      {unrecorded && notes}
+
       {status === "consent_pending" && (
         <section className="wa-panel" aria-labelledby="consent-title">
           <h2 className="wa-heading" id="consent-title">Consent</h2>
@@ -300,6 +335,7 @@ function ConsultationView({ userId }: { userId: string }) {
       )}
 
       {FORM_STATUSES.includes(status) && <FormPanel consultationId={consultation.id} status={status} onChanged={load} />}
+      {!unrecorded && !["consent_withdrawn", "archived"].includes(status) && notes}
 
       {shown?.check && <PatientCheck consultationId={consultation.id} shown={shown} candidate={candidate} onChanged={load} />}
       {!["consent_withdrawn", "archived"].includes(status) && <PatientPanel consultation={consultation} patient={shown} onChanged={load} />}
@@ -315,7 +351,7 @@ function ConsultationView({ userId }: { userId: string }) {
 
       {status !== "archived" && <WhatsAppPanel consultationId={consultation.id} />}
 
-      {HAS_TRANSCRIPT.includes(status) && (status !== "archived" || hasTranscript) && (
+      {HAS_TRANSCRIPT.includes(status) && hasTranscript && (
         <TranscriptView consultationId={consultation.id} language={language}
           editable={!["approved", "corrected", "archived"].includes(status)} />
       )}

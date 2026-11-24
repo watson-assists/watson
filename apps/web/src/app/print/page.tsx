@@ -8,7 +8,7 @@ import { AppShell } from "@/components/app-shell";
 import { Notice } from "@/components/status";
 import { isId } from "@/lib/api";
 import { asClock, asDayMonthYear } from "@/lib/dates";
-import { answerText, formBmi, formState, translated, type ConsultationRecord, type OutputLanguage } from "@/lib/export";
+import { answerText, forPatient, formBmi, formState, translated, type ConsultationRecord, type OutputLanguage } from "@/lib/export";
 import { loadRecords } from "@/lib/records";
 import { RequireSession } from "@/lib/session";
 
@@ -32,6 +32,7 @@ function PrintView() {
   const params = useSearchParams();
   const id = params.get("id") ?? "";
   const all = params.get("all") === "1";
+  const patient = !all && params.get("for") === "patient"; // the report and instructions (owner, 23 Nov)
   const requested = params.get("language");
   const language: OutputLanguage = requested === "en" || requested === "sk" ? requested : "both";
   const [records, setRecords] = useState<ConsultationRecord[] | "failed" | null>(null);
@@ -63,41 +64,46 @@ function PrintView() {
         <div className="wa-actions" aria-label="Output language">
           {(["en", "sk", "both"] as const).map((choice) => (
             <Link key={choice} className={`wa-button wa-button--small ${language === choice ? "wa-button--primary" : "wa-button--secondary"}`}
-              href={`/print/?${all ? "all=1&" : `id=${id}&`}language=${choice}`}>
+              href={`/print/?${all ? "all=1&" : `id=${id}&`}${patient ? "for=patient&" : ""}language=${choice}`}>
               {choice === "en" ? "English" : choice === "sk" ? "Slovak" : "Bilingual"}
             </Link>
           ))}
         </div>
       </div>
       {records.length === 0 && <p className="wa-text">No consultations yet.</p>}
-      {records.map((record, index) => <Printed key={index} record={record} language={language} />)}
+      {patient && records.some((record) => !record.approvedAt)
+        ? <Notice title="Approve the form first">The patient gets only what you approved.</Notice>
+        : records.map((record, index) => <Printed key={index} record={record} language={language} patient={patient} />)}
     </>
   );
 }
 
-function Printed({ record, language }: { record: ConsultationRecord; language: OutputLanguage }) {
+function Printed({ record, language, patient = false }: { record: ConsultationRecord; language: OutputLanguage; patient?: boolean }) {
   const at = new Date(record.scheduledAt);
   const answers = new Map(record.answers.map((answer) => [answer.field_key, answer]));
-  const index = formBmi(answers);
+  const index = patient ? null : formBmi(answers);
+  const template = record.template && patient ? forPatient(record.template) : record.template;
   return (
     <article className="wa-printed">
       <header className="wa-printed__head">
-        <p className="wa-hero__eyebrow">{record.template
-          ? translated(record.template.title, record.template.title_i18n, language) : "Consultation"}</p>
+        <p className="wa-hero__eyebrow">{patient ? ({ en: "Your consultation", sk: "Vaša konzultácia", both: "Vaša konzultácia / Your consultation" })[language]
+          : record.template ? translated(record.template.title, record.template.title_i18n, language) : "Consultation"}</p>
         <h1 className="wa-title">{record.patient}</h1>
         <p className="wa-printed__meta">
           {asDayMonthYear(at)} {asClock(at)} · {record.practitioner}{record.contact && ` · ${record.contact}`}
         </p>
-        <p className="wa-printed__meta">{formState(record)}
+        {!patient && <p className="wa-printed__meta">{formState(record)}
           {record.revision !== null && ` · Revision ${record.revision} (${record.revisionKind?.replaceAll("_", " ")})`}
-        </p>
-        {record.templateHash && <p className="wa-printed__meta">Template SHA-256: {record.templateHash}</p>}
+        </p>}
+        {!patient && record.templateHash && <p className="wa-printed__meta">Template SHA-256: {record.templateHash}</p>}
       </header>
-      {record.template ? record.template.sections.map((section) => (
+      {template ? template.sections.map((section) => ({ section, fields: section.fields.filter((field) => field.value_type !== "signature"
+        && (!patient || answerText(answers.get(field.key), field, language))) })) // the patient's copy: only what has an answer
+        .filter(({ fields }) => fields.length > 0).map(({ section, fields }) => (
         <section key={section.title} className="wa-printed__section">
           <h2 className="wa-heading">{translated(section.title, section.title_i18n, language)}</h2>
           <dl className="wa-printed__answers">
-            {section.fields.filter((field) => field.value_type !== "signature").map((field) => (
+            {fields.map((field) => (
               <div key={field.key}>
                 <dt>{translated(field.label, field.label_i18n, language)}{field.mode === "manual" && <span className="wa-printed__only"> · only for you</span>}</dt>
                 <dd>{answerText(answers.get(field.key), field, language) || "—"}</dd>

@@ -43,7 +43,7 @@ export function FormPanel({ consultationId, status, onChanged }: {
 
   const read = useCallback(async (): Promise<Read> => {
     const [job, form, engine] = await Promise.all([
-      supabase.from("form_jobs").select("*").eq("consultation_id", consultationId)
+      supabase.from("form_jobs").select("*").eq("consultation_id", consultationId).neq("revision_kind", "during_call")
         .order("queued_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("forms").select("id, status, approved_at, template, form_template_version_id, revision_number, revision_kind")
         .eq("consultation_id", consultationId).neq("status", "superseded")
@@ -93,7 +93,10 @@ export function FormPanel({ consultationId, status, onChanged }: {
   async function retry() {
     setBusy(true);
     setProblem(null);
-    const outcome = await call("start_form", { p_consultation_id: consultationId });
+    // A form filled from the notes, without a recording (owner's test team, 23 Nov), is tried again the same way.
+    const outcome = seen?.job && seen.job.transcript_id === null
+      ? await call("start_form_without_recording", { p_consultation_id: consultationId, p_by_watson: true })
+      : await call("start_form", { p_consultation_id: consultationId });
     setBusy(false);
     if (!outcome.ok) setProblem(explain(outcome.error_category));
     onChanged();

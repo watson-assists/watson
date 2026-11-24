@@ -8,11 +8,12 @@ import { AppShell } from "@/components/app-shell";
 import { Notice } from "@/components/status";
 import { call, explain, isId } from "@/lib/api";
 import { clock } from "@/lib/audio";
+import { DoctorNotes } from "@/components/doctor-notes";
 import { DocumentViewer } from "@/components/document-viewer";
 import { openDocument, showsInPage, type Viewable } from "@/lib/documents";
 import { downloadConsultation } from "@/lib/download";
 import type { Tables } from "@/lib/database.types";
-import { formBmi, isTypedFormTemplate } from "@/lib/export";
+import { forPatient, formBmi, isTypedFormTemplate } from "@/lib/export";
 import { loadRecords } from "@/lib/records";
 import { RequireSession } from "@/lib/session";
 import { dateTime } from "@/lib/status";
@@ -77,8 +78,10 @@ async function fetchForm(id: string): Promise<Loaded | "missing" | "failed"> {
   if (!consultation.data || !form.data) return "missing";
   const [answers, segments, attestations, signatures, conflicts] = await Promise.all([
     supabase.from("form_answers").select("*").eq("form_id", form.data.id).order("position"),
-    supabase.from("transcript_segments").select("position, speaker, start_seconds, machine_text, reviewed_text").is("removed_at", null)
-      .eq("transcript_id", form.data.transcript_id).order("position"),
+    form.data.transcript_id
+      ? supabase.from("transcript_segments").select("position, speaker, start_seconds, machine_text, reviewed_text").is("removed_at", null)
+        .eq("transcript_id", form.data.transcript_id).order("position")
+      : Promise.resolve({ data: [] as Segment[], error: null }), // made without a recording (owner's test team, 23 Nov)
     supabase.from("form_attestations").select("*").eq("form_id", form.data.id),
     supabase.from("form_signatures").select("*").eq("form_id", form.data.id),
     supabase.from("form_reconciliation_conflicts").select("*").eq("form_id", form.data.id).order("created_at"),
@@ -172,6 +175,7 @@ function FormView() {
   // A field only the practitioner fills in, such as private notes (owner, 24 Oct): never "not discussed".
   const manual = (answer: Answer) => fields.get(answer.field_key)?.mode === "manual";
   const asked = answers.filter((answer) => !manual(answer)).length;
+  const recorded = form.transcript_id !== null; // else made from the notes, or by hand (owner's test team, 23 Nov)
   const isEmpty = (answer: Answer) => !manual(answer) && answer.machine_text === null && answer.review !== "edited";
   const suggested = answers.filter((answer) => fields.get(answer.field_key)?.mode === "suggest" && !isEmpty(answer) && answer.review !== "rejected");
   const checked = answered - toCheck;
@@ -225,7 +229,7 @@ function FormView() {
     const empty = isEmpty(answer);
     const text = answer.review === "edited" ? answer.practitioner_text : answer.machine_text;
     const own = manual(answer);
-    const [chipClass, chipText] = own ? ["wa-chip--done", "Only for you"] : empty ? ["wa-chip--done", "Not discussed"] : CHIP[answer.review];
+    const [chipClass, chipText] = own ? ["wa-chip--done", "Only for you"] : empty ? ["wa-chip--done", recorded ? "Not discussed" : "Empty"] : CHIP[answer.review];
     const settled = answer.review !== "unreviewed";
     const modifier = empty ? " wa-answer--empty" : answer.review === "rejected" ? " wa-answer--rejected wa-answer--settled" : settled ? " wa-answer--settled" : "";
     const quotes = answer.evidence.map((position) => segments.get(position)).filter((segment) => segment !== undefined);
@@ -255,7 +259,7 @@ function FormView() {
           </form>
         ) : (
           <>
-            {(!own || text) && <p className="wa-answer__text">{empty ? "Not discussed in the conversation." : text}</p>}
+            {(!own || text) && <p className="wa-answer__text">{empty ? (recorded ? "Not discussed in the conversation." : "Not written yet.") : text}</p>}
             {own && <p className="wa-hint">Only you see this. Watson does not fill it in, and it is never shared.</p>}
             {answer.field_key === "weight" && index && <p className="wa-hint">BMI {index}, worked out from height and weight</p>}
           </>
@@ -328,9 +332,11 @@ function FormView() {
             <p className="wa-hero__eyebrow">{template.title}</p>
             <h1 className="wa-hero__title" id="form-title">{patientName ?? consultation.synthetic_patient_ref}</h1>
             <p className="wa-hero__meta">
-              Filled in by Watson from the call of {dateTime(consultation.scheduled_at)}
-              {documents.size > 0 && ` and ${documents.size === 1 ? "one document" : `${documents.size} documents`}`} · {answered} of {asked} answered
-              {asked > answered && ` · ${asked - answered} not discussed`}
+              {form.job_id === null ? `Written by you, without a recording, for the consultation of ${dateTime(consultation.scheduled_at)}` : <>
+                Filled in by Watson from {form.transcript_id ? "the call" : "your notes"} of {dateTime(consultation.scheduled_at)}
+                {documents.size > 0 && ` and ${documents.size === 1 ? "one document" : `${documents.size} documents`}`} · {answered} of {asked} answered
+                {asked > answered && ` · ${asked - answered} ${form.transcript_id ? "not discussed" : "not in your notes"}`}
+              </>}
             </p>
             <div className="wa-actions" style={{ marginTop: 8 }}>
               <button type="button" className="wa-button wa-button--secondary" disabled={busy} onClick={() => void downloadExcel()}>
@@ -339,6 +345,11 @@ function FormView() {
               <Link href={`/print/?id=${consultation.id}`} className="wa-button wa-button--secondary">
                 <Printer aria-hidden className="wa-icon" />Print or save as PDF
               </Link>
+              {approved && forPatient(template).sections.length > 0 && (
+                <Link href={`/print/?id=${consultation.id}&for=patient`} className="wa-button wa-button--secondary">
+                  <FileText aria-hidden className="wa-icon" />Print for the patient
+                </Link>
+              )}
             </div>
           </div>
           {!approved && answered > 0 && (
@@ -349,7 +360,7 @@ function FormView() {
             </div>
           )}
         </div>
-        {suggested.length > 0 && (
+        {suggested.length > 0 && form.job_id !== null && (
           <div className="wa-suggests">
             <p className="wa-suggests__title">Watson suggests · decide yourself</p>
             {suggested.map((answer) => (
@@ -361,7 +372,7 @@ function FormView() {
       {approved && (
         <Notice title={`Approved ${form.approved_at ? dateTime(form.approved_at) : ""}`}>This form is final. It is the record of the consultation.</Notice>
       )}
-      {!approved && late.length > 0 && ["draft_ready", "under_review"].includes(consultation.status) && (
+      {!approved && form.transcript_id && late.length > 0 && ["draft_ready", "under_review"].includes(consultation.status) && (
         <Notice tone="attention" title={late.length === 1 ? "A document arrived after Watson filled this in" : `${late.length} documents arrived after Watson filled this in`}
           actions={<button type="button" className="wa-button wa-button--secondary wa-button--small" disabled={busy} onClick={fillAgain}>
             <RefreshCw aria-hidden className="wa-icon wa-icon--sm" />Fill in again</button>}>
@@ -381,7 +392,7 @@ function FormView() {
                 {members.filter((answer) => !tucked.includes(answer)).map(card)}
                 {tucked.length > 0 && (
                   <p className="wa-tucked">
-                    Not discussed:
+                    {recorded ? "Not discussed:" : "To fill in:"}
                     {tucked.map((answer) => approved ? (
                       <strong key={answer.field_key}>{fields.get(answer.field_key)?.label ?? answer.field_key}</strong>
                     ) : (
@@ -397,6 +408,11 @@ function FormView() {
             );
           })}
         </div>
+        {!form.transcript_id ? (
+          <aside className="wa-review__aside">
+            <DoctorNotes consultationId={consultation.id} editable={!approved} look="side" />
+          </aside>
+        ) : (
         <aside className="wa-review__aside" aria-label="The conversation" ref={aside}>
           <h2 className="wa-heading">The conversation</h2>
           <p className="wa-hint">Lines the selected answer comes from are lit.</p>
@@ -414,6 +430,7 @@ function FormView() {
             ))}
           </ol>
         </aside>
+        )}
       </div>
       {!approved && (
         <div className="wa-approve">
