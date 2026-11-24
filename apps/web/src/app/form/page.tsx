@@ -9,14 +9,15 @@ import { Notice } from "@/components/status";
 import { call, explain, isId } from "@/lib/api";
 import { clock } from "@/lib/audio";
 import { DoctorNotes } from "@/components/doctor-notes";
+import { FormVersions } from "@/components/form-versions";
 import { PrescriptionsPanel } from "@/components/prescriptions-panel";
 import { DocumentViewer } from "@/components/document-viewer";
 import { openDocument, showsInPage, type Viewable } from "@/lib/documents";
 import { downloadConsultation } from "@/lib/download";
 import type { Tables } from "@/lib/database.types";
-import { forPatient, formBmi, isTypedFormTemplate } from "@/lib/export";
+import { forPatient, formBmi, isTypedFormTemplate, type FormTemplate } from "@/lib/export";
 import { loadRecords } from "@/lib/records";
-import { RequireSession } from "@/lib/session";
+import { RequireSession, useSession } from "@/lib/session";
 import { dateTime } from "@/lib/status";
 import { supabase } from "@/lib/supabase";
 
@@ -130,6 +131,7 @@ function FormView() {
   const [viewing, setViewing] = useState<Viewable | null>(null);
   const aside = useRef<HTMLElement>(null);
   const router = useRouter();
+  const session = useSession();
   const notOpened = () => setProblem("The document could not be opened. Try again.");
   async function openQuoted(document: Viewable) {
     if (showsInPage(document.media_type)) return setViewing(document);
@@ -177,6 +179,9 @@ function FormView() {
   const manual = (answer: Answer) => fields.get(answer.field_key)?.mode === "manual";
   const asked = answers.filter((answer) => !manual(answer)).length;
   const recorded = form.transcript_id !== null; // else made from the notes, or by hand (owner's test team, 23 Nov)
+  // Changing the approved form (owner's test team, 23 Nov): only the doctor who approved it; a new version.
+  const mine = session.status === "signed-in" && form.approved_by === session.user.id;
+  const changing = !approved && form.revision_number > 1 && form.revision_kind === "correction";
   const isEmpty = (answer: Answer) => !manual(answer) && answer.machine_text === null && answer.review !== "edited";
   const suggested = answers.filter((answer) => fields.get(answer.field_key)?.mode === "suggest" && !isEmpty(answer) && answer.review !== "rejected");
   const checked = answered - toCheck;
@@ -199,6 +204,22 @@ function FormView() {
     setBusy(true);
     setProblem(null);
     const outcome = await call("approve_form", { p_form_id: form.id });
+    setBusy(false);
+    if (!outcome.ok) return setProblem(explain(outcome.error_category));
+    load();
+  }
+  async function startChange() {
+    setBusy(true);
+    setProblem(null);
+    const outcome = await call("start_form_change", { p_consultation_id: consultation.id });
+    setBusy(false);
+    if (!outcome.ok) return setProblem(explain(outcome.error_category));
+    load();
+  }
+  async function discardChange() {
+    setBusy(true);
+    setProblem(null);
+    const outcome = await call("reject_form_revision", { p_form_id: form.id });
     setBusy(false);
     if (!outcome.ok) return setProblem(explain(outcome.error_category));
     load();
@@ -371,7 +392,18 @@ function FormView() {
         )}
       </section>
       {approved && (
-        <Notice title={`Approved ${form.approved_at ? dateTime(form.approved_at) : ""}`}>This form is final. It is the record of the consultation.</Notice>
+        <Notice title={`Approved ${form.approved_at ? dateTime(form.approved_at) : ""}`} actions={mine && (
+          <button type="button" className="wa-button wa-button--secondary" disabled={busy} onClick={() => void startChange()}>
+            <Pencil aria-hidden className="wa-icon" />Change the form
+          </button>
+        )}>This form is final. It is the record of the consultation.{mine && " A change becomes a new version; this one is kept."}</Notice>
+      )}
+      {changing && (
+        <Notice tone="attention" title="Changing the approved form" actions={
+          <button type="button" className="wa-button wa-button--secondary" disabled={busy} onClick={() => void discardChange()}>Discard changes</button>
+        }>
+          Change any answer below, then approve the changes. Until then the patient sees the form as you approved it before.
+        </Notice>
       )}
       {!approved && form.transcript_id && late.length > 0 && ["draft_ready", "under_review"].includes(consultation.status) && (
         <Notice tone="attention" title={late.length === 1 ? "A document arrived after Watson filled this in" : `${late.length} documents arrived after Watson filled this in`}
@@ -445,10 +477,11 @@ function FormView() {
             {toCheck === 0 ? "Every answer is checked." : `${toCheck} ${toCheck === 1 ? "answer" : "answers"} still to check`}
           </p>
           <button type="button" className="wa-button wa-button--primary" disabled={busy || toCheck > 0} onClick={approve}>
-            Approve form
+            {changing ? "Approve changes" : "Approve form"}
           </button>
         </div>
       )}
+      <FormVersions key={`${form.id}-${form.status}`} consultationId={consultation.id} template={template as unknown as FormTemplate} />
       <DocumentViewer document={viewing} onClose={() => setViewing(null)} onFailed={() => { setViewing(null); notOpened(); }} />
     </>
   );

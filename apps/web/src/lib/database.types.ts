@@ -767,6 +767,7 @@ export type Database = {
           form_template_version_id: string | null
           id: string
           job_id: string | null
+          medicines: Json | null
           parent_form_id: string | null
           revision_kind: string
           revision_number: number
@@ -784,6 +785,7 @@ export type Database = {
           form_template_version_id?: string | null
           id?: string
           job_id?: string | null
+          medicines?: Json | null
           parent_form_id?: string | null
           revision_kind?: string
           revision_number: number
@@ -800,6 +802,7 @@ export type Database = {
           form_template_version_id?: string | null
           id?: string
           job_id?: string | null
+          medicines?: Json | null
           parent_form_id?: string | null
           revision_kind?: string
           revision_number?: number
@@ -1552,6 +1555,7 @@ export type Database = {
       }
     }
     Functions: {
+      start_form_change: { Args: { p_consultation_id: string }; Returns: Json }
       mark_order_sent: { Args: { p_order_id: string }; Returns: Json }
       open_shop_order: { Args: { p_item_ids: string[]; p_token: string }; Returns: Json }
       patient_report: { Args: { p_token: string }; Returns: Json }

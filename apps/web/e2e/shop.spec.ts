@@ -24,6 +24,9 @@ test("the doctor prescribes from their own shop; the patient reads the report an
   await page.getByRole("link", { name: "New consultation" }).first().click();
   await page.getByLabel("Patient's name").fill("Jana Nováková");
   await page.getByLabel("Phone or email").fill(`+421 905 ${Math.floor(Math.random() * 9e5 + 1e5)}`);
+  // Watson's own form, whatever another test made this account's default.
+  const form = page.getByLabel("Consultation form");
+  await form.selectOption((await form.locator("option", { hasText: /^Ayurvedic consultation/ }).first().getAttribute("value"))!);
   await page.getByRole("button", { name: "Create consultation" }).click();
   await expect(page).toHaveURL(/\/consultation\/\?id=/);
   const id = new URL(page.url()).searchParams.get("id")!;
