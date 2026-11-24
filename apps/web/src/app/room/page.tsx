@@ -240,7 +240,7 @@ function Room({ userId }: { userId: string }) {
           )}
           {recording && live && <span className="wa-live" role="status">Recording {clock(elapsed)}</span>}
           {declined && live && <span className="wa-live wa-live--off" role="status">Not recorded</span>}
-          <div className="wa-screen__self"><video ref={localVideo} autoPlay playsInline muted aria-label="You" /></div>
+          <div className="wa-screen__self" hidden={state === null}><video ref={localVideo} autoPlay playsInline muted aria-label="You" /></div>
         </div>
         <div className="wa-call__bar">
           {state === null && !step ? (

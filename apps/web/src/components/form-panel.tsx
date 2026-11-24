@@ -202,10 +202,10 @@ export function FormPanel({ consultationId, status, onChanged }: {
       </p>
       {approved && (
         <div className="wa-form" style={{ marginTop: 16 }}>
-          <p className="wa-hint">Create an append-only correction, or convert the retained final transcript to another immutable form. This approved revision stays unchanged.</p>
+          <p className="wa-hint">Watson can fill in this form again from the conversation, or fill in another of your forms from it. The approved form stays as it is; Watson&rsquo;s new one is a new version for you to check.</p>
           <div className="wa-fields-row" style={{ alignItems: "end" }}>
             <div className="wa-field">
-              <label className="wa-label" htmlFor={`revision-template-${consultationId}`}>Revision form</label>
+              <label className="wa-label" htmlFor={`revision-template-${consultationId}`}>Form to fill in</label>
               <div className="wa-select"><select id={`revision-template-${consultationId}`}
                 value={revisionTemplate || form.form_template_version_id || ""}
                 onChange={(event) => setRevisionTemplate(event.target.value)}>
@@ -217,7 +217,7 @@ export function FormPanel({ consultationId, status, onChanged }: {
             <button type="button" className="wa-button wa-button--secondary"
               disabled={busy || versions.length === 0 || !form.form_template_version_id}
               onClick={() => void createRevision()}>
-              {revisionTemplate && revisionTemplate !== form.form_template_version_id ? "Convert transcript" : "Create correction"}
+              {revisionTemplate && revisionTemplate !== form.form_template_version_id ? "Fill in this form" : "Fill in again"}
             </button>
           </div>
         </div>

@@ -101,10 +101,7 @@ function Printed({ record, language, patient = false, medicines = [] }: {
         <p className="wa-printed__meta">
           {asDayMonthYear(at)} {asClock(at)} · {record.practitioner}{record.contact && ` · ${record.contact}`}
         </p>
-        {!patient && <p className="wa-printed__meta">{formState(record)}
-          {record.revision !== null && ` · Revision ${record.revision} (${record.revisionKind?.replaceAll("_", " ")})`}
-        </p>}
-        {!patient && record.templateHash && <p className="wa-printed__meta">Template SHA-256: {record.templateHash}</p>}
+        {!patient && <p className="wa-printed__meta">{formState(record)}</p>}
       </header>
       {template ? template.sections.map((section) => ({ section, fields: section.fields.filter((field) => field.value_type !== "signature"
         && (!patient || answerText(answers.get(field.key), field, language))) })) // the patient's copy: only what has an answer
@@ -114,7 +111,9 @@ function Printed({ record, language, patient = false, medicines = [] }: {
           <dl className="wa-printed__answers">
             {fields.map((field) => (
               <div key={field.key}>
-                <dt>{translated(field.label, field.label_i18n, language)}{field.mode === "manual" && <span className="wa-printed__only"> · only for you</span>}</dt>
+                {(field.label !== section.title || field.mode === "manual") && (
+                  <dt>{translated(field.label, field.label_i18n, language)}{field.mode === "manual" && <span className="wa-printed__only"> · only for you</span>}</dt>
+                )}
                 <dd>{answerText(answers.get(field.key), field, language) || "—"}</dd>
               </div>
             ))}

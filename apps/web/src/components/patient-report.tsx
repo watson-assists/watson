@@ -52,7 +52,8 @@ export function PatientReport({ token, report, cancelled }: { token: string; rep
             <dl className="wa-printed__answers">
               {fields.map((field) => (
                 <div key={field.key}>
-                  <dt>{translated(field.label, field.label_i18n, language)}</dt>
+                  {/* "Assessment" under "Assessment" says it twice */}
+                  {field.label !== section.title && <dt>{translated(field.label, field.label_i18n, language)}</dt>}
                   <dd style={{ whiteSpace: "pre-wrap" }}>{answerText(answers.get(field.key), field, language)}</dd>
                 </div>
               ))}

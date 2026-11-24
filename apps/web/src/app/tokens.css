@@ -105,7 +105,7 @@
   --radius-paper: 4px;
   --radius-control: 6px;
   --radius-pill: 999px;
-  --control-height: 44px;
+  --control-height: 48px;
   --content-width: 1040px;
   --measure: 68ch;
   --font-display: "Eczar Variable", Georgia, serif;
@@ -115,9 +115,9 @@
 .wordmark { font-family: var(--font-display); font-size: 28px; line-height: 32px; font-weight: 600; letter-spacing: -0.01em; }
 .title { font-family: var(--font-display); font-size: 32px; line-height: 38px; font-weight: 600; letter-spacing: -0.01em; }
 .thesis { font-family: var(--font-display); font-size: 26px; line-height: 34px; font-weight: 500; }
-.heading { font-family: var(--font-text); font-size: 19px; line-height: 26px; font-weight: 700; }
-.transcript { font-family: var(--font-text); font-size: 17px; line-height: 28px; font-weight: 400; }
-.body { font-family: var(--font-text); font-size: 16px; line-height: 24px; font-weight: 400; }
-.label { font-family: var(--font-text); font-size: 15px; line-height: 20px; font-weight: 600; }
-.small { font-family: var(--font-text); font-size: 14px; line-height: 20px; font-weight: 400; }
-.mono { font-family: var(--font-mono); font-size: 14px; line-height: 20px; font-weight: 500; }
+.heading { font-family: var(--font-text); font-size: 20px; line-height: 28px; font-weight: 700; }
+.transcript { font-family: var(--font-text); font-size: 18px; line-height: 30px; font-weight: 400; }
+.body { font-family: var(--font-text); font-size: 18px; line-height: 28px; font-weight: 400; }
+.label { font-family: var(--font-text); font-size: 16px; line-height: 22px; font-weight: 600; }
+.small { font-family: var(--font-text); font-size: 15px; line-height: 22px; font-weight: 400; }
+.mono { font-family: var(--font-mono); font-size: 15px; line-height: 22px; font-weight: 500; }

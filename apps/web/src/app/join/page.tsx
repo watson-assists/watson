@@ -227,7 +227,7 @@ function Join() {
           {state === "connected" && (details.recording === "agreed"
             ? <span className="wa-live" role="status">Recorded</span>
             : <span className="wa-live wa-live--off" role="status">Not recorded</span>)}
-          <div className="wa-screen__self"><video ref={localVideo} autoPlay playsInline muted aria-label="You" /></div>
+          <div className="wa-screen__self" hidden={state === null}><video ref={localVideo} autoPlay playsInline muted aria-label="You" /></div>
         </div>
         <div className="wa-call__bar">
           {state === null ? details.recording !== null && !asking && (

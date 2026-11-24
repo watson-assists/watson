@@ -366,7 +366,7 @@ function Case({ row }: { row: Row }) {
   return (
     <Link href={formReady ? `/form/?id=${row.id}` : `/consultation/?id=${row.id}`} className={`wa-case ${edge}`}>
       <div className="wa-case__top">
-        <span className={row.person ? "wa-case__name" : "wa-case__ref"}>{row.person?.name ?? "Patient not named yet"}</span>
+        <span className="wa-case__name" style={row.person ? undefined : { color: "var(--ink-muted)" }}>{row.person?.name ?? "Patient not named yet"}</span>
         <StatusChip status={row.status} />
       </div>
       {row.person?.check && <span className="wa-chip wa-chip--attention" style={{ justifySelf: "start" }}>Check who this is</span>}
