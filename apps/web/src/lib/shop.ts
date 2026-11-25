@@ -1,15 +1,18 @@
 // Watson's own simple shop (owner, 23 Nov): each practice's herbs and supplements, prescribed after a
-// consultation and bought by the patient on their link, through Stripe.
+// consultation and bought by the patient on their link, through Stripe; since 25 Nov also from the
+// practice's open shop (/shop/?p=<page>), by anyone with the link.
 import type { Tables } from "./database.types";
 import { supabase } from "./supabase";
 
 export type Product = Pick<Tables<"shop_products">, "id" | "name" | "description" | "price_cents" | "photo_path" | "active">;
+/** A product as the practice manages it: also whether its open shop sells it (25 Nov). */
+export type StockedProduct = Product & Pick<Tables<"shop_products">, "in_open_shop">;
 /** What the patient's page shows of a prescription. */
 export type Prescribed = { id: string; name: string; description: string; photo_path: string | null;
   price_cents: number; quantity: number; instructions: string; available: boolean };
 export type OrderLine = { name: string; quantity: number; price_cents: number };
-/** The address the patient gave Stripe. */
-export type ShipTo = { name?: string | null; address?: Record<string, string | null> | null } | null;
+/** The address (and, since 25 Nov, the email) the buyer gave Stripe. */
+export type ShipTo = { name?: string | null; email?: string | null; address?: Record<string, string | null> | null } | null;
 
 /** A product photo's public address (the bucket is public: photos of products only). */
 export const photoUrl = (path: string | null) => (path ? supabase.storage.from("shop").getPublicUrl(path).data.publicUrl : null);

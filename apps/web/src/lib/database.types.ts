@@ -1191,17 +1191,17 @@ export type Database = {
         ]
       }
       shop_orders: {
-        Row: { consultation_id: string; created_at: string; id: string; items: Json; paid_at: string | null; sent_at: string | null; ship_to: Json | null; status: string; stripe_checkout_session_id: string | null; total_cents: number }
+        Row: { consultation_id: string | null; created_at: string; id: string; items: Json; paid_at: string | null; practitioner_id: string; sent_at: string | null; ship_to: Json | null; status: string; stripe_checkout_session_id: string | null; total_cents: number }
         ComputedFields: never
-        Insert: { consultation_id: string; created_at?: string; id?: string; items: Json; paid_at?: string | null; sent_at?: string | null; ship_to?: Json | null; status?: string; stripe_checkout_session_id?: string | null; total_cents: number }
-        Update: { consultation_id?: string; created_at?: string; id?: string; items?: Json; paid_at?: string | null; sent_at?: string | null; ship_to?: Json | null; status?: string; stripe_checkout_session_id?: string | null; total_cents?: number }
+        Insert: { consultation_id?: string | null; created_at?: string; id?: string; items: Json; paid_at?: string | null; practitioner_id: string; sent_at?: string | null; ship_to?: Json | null; status?: string; stripe_checkout_session_id?: string | null; total_cents: number }
+        Update: { consultation_id?: string | null; created_at?: string; id?: string; items?: Json; paid_at?: string | null; practitioner_id?: string; sent_at?: string | null; ship_to?: Json | null; status?: string; stripe_checkout_session_id?: string | null; total_cents?: number }
         Relationships: []
       }
       shop_products: {
-        Row: { active: boolean; created_at: string; description: string; id: string; name: string; photo_path: string | null; practitioner_id: string; price_cents: number; updated_at: string }
+        Row: { active: boolean; created_at: string; description: string; id: string; in_open_shop: boolean; name: string; photo_path: string | null; practitioner_id: string; price_cents: number; updated_at: string }
         ComputedFields: never
-        Insert: { active?: boolean; created_at?: string; description?: string; id?: string; name: string; photo_path?: string | null; practitioner_id: string; price_cents: number; updated_at?: string }
-        Update: { active?: boolean; created_at?: string; description?: string; id?: string; name?: string; photo_path?: string | null; practitioner_id?: string; price_cents?: number; updated_at?: string }
+        Insert: { active?: boolean; created_at?: string; description?: string; id?: string; in_open_shop?: boolean; name: string; photo_path?: string | null; practitioner_id: string; price_cents: number; updated_at?: string }
+        Update: { active?: boolean; created_at?: string; description?: string; id?: string; in_open_shop?: boolean; name?: string; photo_path?: string | null; practitioner_id?: string; price_cents?: number; updated_at?: string }
         Relationships: []
       }
       spellings: {
@@ -1566,11 +1566,13 @@ export type Database = {
       forget_lesson: { Args: { p_forget: boolean; p_key: string }; Returns: Json }
       start_form_change: { Args: { p_consultation_id: string }; Returns: Json }
       mark_order_sent: { Args: { p_order_id: string }; Returns: Json }
+      open_shop: { Args: { p_slug: string }; Returns: Json }
       open_shop_order: { Args: { p_item_ids: string[]; p_token: string }; Returns: Json }
       patient_report: { Args: { p_token: string }; Returns: Json }
       prescribe: { Args: { p_consultation_id: string; p_instructions: string; p_product_id: string; p_quantity: number }; Returns: Json }
-      record_shop_payment: { Args: { p_amount_cents: number; p_consultation_id: string; p_order_id: string; p_session_id: string; p_ship_to: Json }; Returns: Json }
-      save_shop_product: { Args: { p_active: boolean; p_description: string; p_id: string | null; p_name: string; p_photo_path: string | null; p_price_cents: number }; Returns: Json }
+      record_shop_payment: { Args: { p_amount_cents: number; p_consultation_id: string | null; p_order_id: string; p_session_id: string; p_ship_to: Json }; Returns: Json }
+      save_shop_product: { Args: { p_active: boolean; p_description: string; p_id: string | null; p_in_open_shop?: boolean | null; p_name: string; p_photo_path: string | null; p_price_cents: number }; Returns: Json }
+      start_shop_order: { Args: { p_items: Json; p_slug: string }; Returns: Json }
       unprescribe: { Args: { p_item_id: string }; Returns: Json }
       add_document: {
         Args: {
