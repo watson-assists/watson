@@ -19,7 +19,7 @@ type Shop = { products: StockedProduct[]; orders: Order[]; slug: string | null }
 /**
  * The practice's own shop (owner, 23 Nov): the herbs and supplements the doctor prescribes. Patients see
  * them on their link once the doctor approves their form, and buy them there; the doctor sends them.
- * Since 25 Nov the doctor's shop link sells the products they put in it to anyone.
+ * Since 25 Nov Watson's shop sells to anyone the products the doctor puts in it.
  */
 export function ShopSettings() {
   const [shop, setShop] = useState<Shop | null>(null);
@@ -60,7 +60,7 @@ export function ShopSettings() {
           {shop.slug && <Link className="wa-button wa-button--quiet wa-button--small" href={`/shop/?p=${shop.slug}`} target="_blank">
             <ExternalLink aria-hidden className="wa-icon wa-icon--sm" />See it as a customer</Link>}
         </div>
-        <p className="wa-hint">Herbs and supplements you prescribe: patients see them with your report, once you approve their form, and buy them on their link. Those you put in your shop link, anyone can buy. You send what they buy.</p>
+        <p className="wa-hint">Herbs and supplements you prescribe: patients see them with your report, once you approve their form, and buy them on their link. Those you put in Watson&apos;s shop, anyone can buy there. You send what they buy.</p>
         {products.length === 0 && editing === null && <p className="wa-text">No products yet.</p>}
         <ul className="wa-shop">
           {products.map((product) => editing !== "new" && editing?.id === product.id ? (
@@ -70,7 +70,7 @@ export function ShopSettings() {
               {/* eslint-disable-next-line @next/next/no-img-element -- a static site: no image server for next/image */}
               {product.photo_path ? <img className="wa-shop__photo" src={photoUrl(product.photo_path)!} alt="" /> : <span className="wa-shop__photo" aria-hidden />}
               <div className="wa-shop__text">
-                <p className="wa-shop__name">{product.name} <span className="wa-meta">· {euros(product.price_cents)}{!product.active && " · hidden"}{product.active && product.in_open_shop && " · in your shop link"}</span></p>
+                <p className="wa-shop__name">{product.name} <span className="wa-meta">· {euros(product.price_cents)}{!product.active && " · hidden"}{product.active && product.in_open_shop && " · in the shop"}</span></p>
                 {product.description && <p className="wa-meta">{product.description}</p>}
               </div>
               <div className="wa-actions">
@@ -95,9 +95,9 @@ export function ShopSettings() {
   );
 }
 
-/** The open shop's address (owner, 25 Nov), like the booking link. */
+/** The address of the doctor's own products in Watson's shop (owner, 25 Nov), like the booking link. */
 function ShopLink({ slug }: { slug: string | null }) {
-  if (!slug) return <p className="wa-hint">Save your page for patients to get a shop link anyone can buy from.</p>;
+  if (!slug) return <p className="wa-hint">Save your page for patients so your products show in Watson&apos;s shop with your name.</p>;
   const link = `${typeof window === "undefined" ? "" : window.location.origin}/shop/?p=${slug}`;
   return (
     <div className="wa-field">
@@ -106,7 +106,7 @@ function ShopLink({ slug }: { slug: string | null }) {
         <input className="wa-input" readOnly value={link} aria-labelledby="shop-link-label" />
         <CopyButton text={link} />
       </div>
-      <p className="wa-hint">Anyone with it can buy the products you put in it, without a consultation.</p>
+      <p className="wa-hint">Your products in Watson&apos;s shop. Anyone can buy them, without a consultation.</p>
     </div>
   );
 }
@@ -128,7 +128,7 @@ function OrdersToSend({ orders, onSent }: { orders: Order[]; onSent: () => void 
             <li key={order.id} className="wa-shop__item">
               <div className="wa-shop__text">
                 <p className="wa-shop__name">{order.consultations?.patients?.name ?? order.consultations?.patient_claim_name ?? order.ship_to?.name ?? "Customer"}{" "}
-                  <span className="wa-meta">· {order.consultations ? "" : "from your shop link · "}paid {dateTime(order.paid_at)} · {euros(order.total_cents)}</span></p>
+                  <span className="wa-meta">· {order.consultations ? "" : "from the shop · "}paid {dateTime(order.paid_at)} · {euros(order.total_cents)}</span></p>
                 <p className="wa-text">{lines(order.items)}</p>
                 <p className="wa-meta">Send to: {address(order.ship_to) || "no address given"}</p>
                 {order.ship_to?.email && <p className="wa-meta">Email: {order.ship_to.email}</p>}
@@ -212,8 +212,8 @@ function ProductForm({ product, onDone }: { product: StockedProduct | null; onDo
       <label className="wa-check">
         <input type="checkbox" checked={open} onChange={(event) => setOpen(event.target.checked)} />
         <span className="wa-check__text">
-          <span className="wa-check__label">In your shop link</span>
-          <span className="wa-hint">Anyone with your shop link can buy it. Leave it off for what you only prescribe.</span>
+          <span className="wa-check__label">In Watson&apos;s shop</span>
+          <span className="wa-hint">Anyone can buy it in the shop. Leave it off for what you only prescribe.</span>
         </span>
       </label>
       <div className="wa-actions">

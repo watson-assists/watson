@@ -1,12 +1,16 @@
 // Watson's own simple shop (owner, 23 Nov): each practice's herbs and supplements, prescribed after a
-// consultation and bought by the patient on their link, through Stripe; since 25 Nov also from the
-// practice's open shop (/shop/?p=<page>), by anyone with the link.
+// consultation and bought by the patient on their link, through Stripe; since 25 Nov also in Watson's
+// shop (/shop/), by anyone.
 import type { Tables } from "./database.types";
 import { supabase } from "./supabase";
 
 export type Product = Pick<Tables<"shop_products">, "id" | "name" | "description" | "price_cents" | "photo_path" | "active">;
-/** A product as the practice manages it: also whether its open shop sells it (25 Nov). */
+/** A product as the practice manages it: also whether Watson's shop sells it (25 Nov). */
 export type StockedProduct = Product & Pick<Tables<"shop_products">, "in_open_shop">;
+/** A product in Watson's shop (shop_catalog), with the practice that sells it. */
+export type ShopItem = Pick<Product, "id" | "name" | "description" | "price_cents" | "photo_path"> & { practice: string; slug: string };
+/** The shop: every practice's products, or with a page, one practice's (named). */
+export type Catalog = { practice: string | null; products: ShopItem[] };
 /** What the patient's page shows of a prescription. */
 export type Prescribed = { id: string; name: string; description: string; photo_path: string | null;
   price_cents: number; quantity: number; instructions: string; available: boolean };

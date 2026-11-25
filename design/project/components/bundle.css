@@ -34,6 +34,10 @@ body {
 .wa-crumb { display: inline-flex; align-items: center; min-height: 44px; gap: var(--space-1); justify-self: start; font: 600 16px/22px var(--font-text); color: var(--practitioner); text-decoration: none; }
 .wa-crumb:hover { text-decoration: underline; }
 .wa-public-signin { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-2) var(--space-4); }
+/* Watson's shop in the public header (25 Nov): beside the sign-in links; on a phone it stays beside the
+   logo and the sign-in links take a row of their own. */
+.wa-public-shop { display: flex; align-items: center; gap: var(--space-2) var(--space-4); margin-left: auto; }
+.wa-public-shop .wa-crumb { display: inline-flex; align-items: center; gap: var(--space-1); }
 .wa-pagehead { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--space-4); }
 .wa-pagehead__text { display: grid; gap: var(--space-1); min-width: 0; }
 .wa-title { margin: 0; font: 600 32px/38px var(--font-display); letter-spacing: -0.01em; text-wrap: balance; }
@@ -273,6 +277,8 @@ body {
 .wa-shop__item:not(:has(> .wa-shop__photo)) { grid-template-columns: minmax(0, 1fr) auto; }
 .wa-shop__item--hidden { opacity: 0.6; }
 .wa-shop__photo { display: block; width: 64px; height: 64px; border-radius: var(--radius-control); background: var(--paper-sunk); object-fit: cover; }
+/* A product in Watson's shop (25 Nov): its photo across the card, or a quiet block without one. */
+.wa-product__photo { display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: var(--radius-control); background: var(--paper-sunk); object-fit: cover; }
 .wa-shop__text { display: grid; gap: 2px; min-width: 0; }
 .wa-shop__text > p { margin: 0; }
 .wa-shop__name { margin: 0; font: 600 18px/28px var(--font-text); color: var(--ink); }
@@ -430,6 +436,8 @@ body {
   .wa-door__card { padding: var(--space-4); }
   .wa-door__card .wa-form > .wa-button { width: 100%; }
   .wa-public-signin { gap: var(--space-1) var(--space-3); }
+  .wa-public-shop { gap: var(--space-3); }
+  .wa-public-shop + .wa-public-signin { order: 3; width: 100%; justify-content: flex-start; }
   .wa-public-signin .wa-crumb { font-size: 15px; }
   .wa-hero { padding: var(--space-6) var(--space-4); }
   .wa-hero__title { font-size: 32px; line-height: 38px; overflow-wrap: anywhere; }

@@ -1,23 +1,19 @@
 "use client";
 
-import { Lock } from "lucide-react";
+import { Check, ChevronLeft, ShoppingBasket } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { PatientShell } from "@/components/patient-shell";
 import { Notice } from "@/components/status";
 import { call } from "@/lib/api";
-import { initials } from "@/lib/booking";
+import { itemCount, MOST, setCount, useBasket } from "@/lib/basket";
 import { euros } from "@/lib/fee";
-import { payment } from "@/lib/payment";
-import { photoUrl, type Product } from "@/lib/shop";
+import { photoUrl, type Catalog, type ShopItem } from "@/lib/shop";
 
-// A practice's open shop (owner, 25 Nov: "the link directly to the store"): /shop/?p=<their page>.
-// Anyone with the link buys what the practice put in it, without a consultation; it sends it to them.
-
-type OpenProduct = Pick<Product, "id" | "name" | "description" | "price_cents" | "photo_path">;
-type OpenShop = { practice: string; products: OpenProduct[] };
-const MOST = 10; // of one product in one order, as the database allows
+// Watson's shop (owner, 25 Nov: "allowing a user to go to the shop directly ... with the ability to
+// add to cart and checkout"): every practice's products in it; /shop/?p=<page> shows one practice's.
+// Anyone can buy, without an account or a consultation. The basket is /basket/.
 
 export default function ShopPage() {
   return (
@@ -28,102 +24,68 @@ export default function ShopPage() {
 }
 
 function Shop() {
-  const params = useSearchParams();
-  const slug = params.get("p") ?? "";
-  const returning = params.get("session_id");
-  const [shop, setShop] = useState<OpenShop | "missing" | null>(null);
-  const [paid, setPaid] = useState<boolean | null>(null);
+  const slug = useSearchParams().get("p");
+  const [catalog, setCatalog] = useState<Catalog | "missing" | "failed" | null>(null);
+  const basket = useBasket();
+  const count = itemCount(basket);
 
   useEffect(() => {
-    call<OpenShop>("open_shop", { p_slug: slug }).then((answer) => setShop(answer.ok ? answer : "missing"));
+    call<Catalog>("shop_catalog", slug ? { p_slug: slug } : {}).then((answer) =>
+      setCatalog(answer.ok ? answer : answer.error_category === "NOT_FOUND" ? "missing" : "failed"));
   }, [slug]);
+  const practice = catalog && typeof catalog === "object" ? catalog.practice : null;
   useEffect(() => {
-    // Back from Stripe: confirm the payment here as well as in Stripe's webhook.
-    if (returning) payment({ shop: slug, session_id: returning }).then((answer) => setPaid(Boolean(answer?.paid)));
-  }, [slug, returning]);
-  const name = shop && shop !== "missing" ? shop.practice : null;
-  useEffect(() => {
-    if (name) document.title = `${name} · Shop · Watson`;
-  }, [name]);
+    document.title = practice ? `${practice} · Shop · Watson` : "Shop · Watson";
+  }, [practice]);
 
-  if (shop === "missing") {
-    return <Notice title="This shop does not exist" actions={<Link className="wa-button wa-button--secondary" href="/">Find a practitioner</Link>}>
+  if (catalog === "missing") {
+    return <Notice title="This shop does not exist" actions={<Link className="wa-button wa-button--secondary" href="/shop/">See all products</Link>}>
       Check the link you were given.</Notice>;
   }
-  if (shop === null || (returning && paid === null)) {
-    return <p className="wa-meta" role="status">{returning ? "Checking your payment…" : "Opening the shop…"}</p>;
-  }
+  if (catalog === "failed") return <Notice tone="failed" title="The shop could not be loaded">Check your connection and reload the page.</Notice>;
+  if (catalog === null) return <p className="wa-meta" role="status">Opening the shop…</p>;
   return (
-    <div style={{ display: "grid", gap: 24, maxWidth: 760 }}>
-      <div className="wa-person__top" style={{ gridTemplateColumns: "80px minmax(0, 1fr)" }}>
-        <span className="wa-monogram wa-monogram--large" aria-hidden>{initials(shop.practice)}</span>
-        <div style={{ display: "grid", gap: 4 }}>
-          <h1 className="wa-title">{shop.practice}</h1>
-          <p className="wa-person__what">Shop</p>
+    <div style={{ display: "grid", gap: 24 }}>
+      {practice && <Link className="wa-crumb" href="/shop/"><ChevronLeft aria-hidden className="wa-icon wa-icon--sm" />All products</Link>}
+      <div className="wa-pagehead">
+        <div className="wa-pagehead__text">
+          <h1 className="wa-title">{practice ? `Shop · ${practice}` : "Shop"}</h1>
+          <p className="wa-person__what">Herbs, supplements and remedies from Watson&apos;s practitioners, sent to your door.</p>
         </div>
+        {count > 0 && (
+          <Link className="wa-button wa-button--primary" href="/basket/">
+            <ShoppingBasket aria-hidden className="wa-icon" />Go to basket ({count})
+          </Link>
+        )}
       </div>
-      {paid === true && <Notice title="Paid. Thank you.">{shop.practice} sends it to you. Stripe emails you a receipt.</Notice>}
-      {paid === false && <Notice tone="attention" title="Your payment is not confirmed yet">If you paid, reload this page in a moment.</Notice>}
-      {params.get("cancelled") === "1" && <Notice title="The payment was not completed">Nothing was charged. You can try again.</Notice>}
-      <Basket slug={slug} shop={shop} />
+      {catalog.products.length === 0 ? <p className="wa-text">Nothing for sale here yet.</p> : (
+        <div className="wa-people">
+          {catalog.products.map((item) => <ProductCard key={item.id} item={item} inBasket={basket[item.id] ?? 0} showPractice={!practice} />)}
+        </div>
+      )}
     </div>
   );
 }
 
-function Basket({ slug, shop }: { slug: string; shop: OpenShop }) {
-  const [count, setCount] = useState<Record<string, number>>({});
-  const [paying, setPaying] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  const chosen = shop.products.filter((product) => (count[product.id] ?? 0) > 0);
-  const total = chosen.reduce((sum, product) => sum + count[product.id] * product.price_cents, 0);
-
-  async function buy() {
-    setPaying(true);
-    setProblem(null);
-    const answer = await payment({ shop: slug, items: chosen.map((product) => ({ product_id: product.id, quantity: count[product.id] })) });
-    if (answer?.url) return window.location.assign(answer.url);
-    setPaying(false);
-    setProblem(answer?.error === "VALIDATION"
-      ? "Something you chose is no longer for sale. Reload the page and choose again."
-      : "Buying is not available right now. Try again in a moment.");
-  }
-
+function ProductCard({ item, inBasket, showPractice }: { item: ShopItem; inBasket: number; showPractice: boolean }) {
   return (
-    <section className="wa-panel" aria-labelledby="products-title">
-      <h2 className="wa-heading" id="products-title">Products</h2>
-      {shop.products.length === 0 ? <p className="wa-text">Nothing for sale here yet.</p> : (
-        <>
-          <ul className="wa-shop">
-            {shop.products.map((product) => (
-              <li key={product.id} className="wa-shop__item">
-                {/* eslint-disable-next-line @next/next/no-img-element -- a static site: no image server for next/image */}
-                {product.photo_path ? <img className="wa-shop__photo" src={photoUrl(product.photo_path)!} alt="" /> : <span className="wa-shop__photo" aria-hidden />}
-                <div className="wa-shop__text">
-                  <p className="wa-shop__name">{product.name}</p>
-                  {product.description && <p className="wa-meta">{product.description}</p>}
-                  <p className="wa-meta">{euros(product.price_cents)} each</p>
-                </div>
-                <div className="wa-field">
-                  <label className="wa-label" htmlFor={`how-many-${product.id}`}>How many</label>
-                  <div className="wa-select">
-                    <select id={`how-many-${product.id}`} value={count[product.id] ?? 0}
-                      onChange={(event) => setCount((now) => ({ ...now, [product.id]: Number(event.target.value) }))}>
-                      {Array.from({ length: MOST + 1 }, (_, n) => <option key={n} value={n}>{n}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <div className="wa-actions">
-            <button type="button" className="wa-button wa-button--primary" disabled={paying || total === 0} aria-busy={paying || undefined} onClick={() => void buy()}>
-              <Lock aria-hidden className="wa-icon" />{paying ? "Opening Stripe…" : total ? `Buy for ${euros(total)}` : "Choose how many"}
-            </button>
-          </div>
-          <p className="wa-hint">You pay on Stripe&apos;s secure page and give the address to send it to. Watson never sees your card.</p>
-        </>
-      )}
-      {problem && <Notice tone="failed" title="Could not start the payment">{problem}</Notice>}
-    </section>
+    <article className="wa-person" aria-labelledby={`product-${item.id}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- a static site: no image server for next/image */}
+      {item.photo_path && <img className="wa-product__photo" src={photoUrl(item.photo_path)!} alt="" />}
+      <div style={{ display: "grid", gap: 4 }}>
+        <h2 className="wa-person__name" id={`product-${item.id}`}>{item.name}</h2>
+        {showPractice && <p className="wa-meta">From <Link href={`/shop/?p=${item.slug}`}>{item.practice}</Link></p>}
+      </div>
+      {item.description && <p className="wa-text" style={{ margin: 0 }}>{item.description}</p>}
+      <p className="wa-person__name" style={{ margin: 0 }}>{euros(item.price_cents)}</p>
+      <div className="wa-actions">
+        <button type="button" className="wa-button wa-button--secondary" disabled={inBasket >= MOST}
+          aria-label={`Add ${item.name} to basket`} onClick={() => setCount(item.id, inBasket + 1)}>
+          <ShoppingBasket aria-hidden className="wa-icon" />{inBasket ? "Add one more" : "Add to basket"}
+        </button>
+        {inBasket > 0 && <span className="wa-meta" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <Check aria-hidden className="wa-icon wa-icon--sm" />{inBasket} in your basket</span>}
+      </div>
+    </article>
   );
 }
