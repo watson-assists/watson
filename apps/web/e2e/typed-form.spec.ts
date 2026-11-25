@@ -98,7 +98,7 @@ test("a completed bilingual massage form opens in typed review", async ({ page, 
   await signIn(page, account);
   await page.goto(`/form/?id=${consultationId}`);
   await expect(page.getByText(/Ayurvedic health & massage therapy assessment/).first()).toBeVisible();
-  await expect(page.getByText(/Revision 1 · final transcript is authoritative/)).toBeVisible();
+  await expect(page.getByText(/Version 1 · filled in by Watson from the full transcript/)).toBeVisible(); // plain words (owner, 25 Nov)
   const concern = page.getByRole("article", { name: /Main concern/ });
   await expect(concern.getByText("Persistent synthetic fatigue.")).toBeVisible();
   await expect(concern.getByRole("button", { name: "Accept" })).toBeVisible();

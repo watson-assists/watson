@@ -15,6 +15,10 @@ type TypedDraft = { state: string; value: unknown };
 type Act = (name: "review_typed_form_answer" | "set_form_attestation" | "approve_form" | "set_form_signature"
   | "resolve_form_reconciliation" | "reject_form_revision", args: object) => Promise<boolean>;
 
+/** A question's label in the form, for the doctor; its key only if the form no longer has it. */
+const labelOf = (template: Template, key: string) =>
+  template.sections.flatMap((section) => section.fields).find((field) => field.key === key)?.label ?? key.replaceAll("_", " ");
+
 function effectiveValue(answer: Answer) {
   return answer.review === "edited" ? answer.practitioner_value : answer.machine_value;
 }
@@ -23,9 +27,9 @@ function valueText(field: Field, answer: Answer): string {
   if (answer.review === "rejected") return "Rejected — no current value";
   if (answer.answer_state !== "known") return ({
     unanswered: "Not answered",
-    explicit_none: "Explicitly none",
-    unknown: "Unknown",
-    not_applicable: "Not applicable",
+    explicit_none: "None",
+    unknown: "Not known",
+    not_applicable: "Does not apply",
   } as Record<string, string>)[answer.answer_state] ?? answer.answer_state;
   const value = effectiveValue(answer);
   if (field.value_type === "single_choice") {
@@ -66,20 +70,20 @@ export function TypedFormView({ loaded, template, reload, back }: {
     <section className="wa-hero" aria-labelledby="typed-form-title">
       <p className="wa-hero__eyebrow">{template.title}</p>
       <h1 className="wa-hero__title" id="typed-form-title">{patientName ?? consultation.synthetic_patient_ref}</h1>
-      <p className="wa-hero__meta">Revision {form.revision_number} · final transcript is authoritative · live values are never copied here</p>
+      <p className="wa-hero__meta">Version {form.revision_number} · filled in by Watson from the full transcript of the call</p>
       <div className="wa-actions"><Link href={`/print/?id=${consultation.id}`} className="wa-button wa-button--secondary">
-        <Printer aria-hidden className="wa-icon" />Bilingual print / PDF</Link></div>
+        <Printer aria-hidden className="wa-icon" />Print or save as PDF</Link></div>
     </section>
-    {approved ? <Notice title="Approved and immutable">This revision is final. A correction must create another revision.</Notice> : null}
+    {approved ? <Notice title="Approved">This form is final. It is the record of the consultation.</Notice> : null}
     {problem ? <Notice tone="failed" title="That did not work">{problem}</Notice> : null}
     {pending.length > 0 ? (
-      <Notice tone="attention" title="Final transcript differs from live coverage">
+      <Notice tone="attention" title="Check these questions">
         <ul className="wa-done-list">
           {pending.map((conflict) => (
             <li key={conflict.id}>
-              <span>Live captions covered <strong>{conflict.field_key.replaceAll("_", " ")}</strong>, but the final transcript produced no answer.</span>
+              <span>During the call the live transcript touched on <strong>{labelOf(template, conflict.field_key)}</strong>, but the full transcript gave no answer. Check the conversation.</span>
               <button type="button" className="wa-button wa-button--secondary wa-button--small" disabled={busy}
-                onClick={() => void act("resolve_form_reconciliation", { p_conflict_id: conflict.id })}>Mark reviewed</button>
+                onClick={() => void act("resolve_form_reconciliation", { p_conflict_id: conflict.id })}>Checked</button>
             </li>
           ))}
         </ul>
@@ -96,11 +100,11 @@ export function TypedFormView({ loaded, template, reload, back }: {
       </section>
     ))}</div>
     {!approved ? <div className="wa-approve">
-      <p className="wa-meta">Approval checks required fields, transcript answers, safety attestations and signatures.</p>
+      <p className="wa-meta">Before you approve, every required answer, safety confirmation and signature must be in place.</p>
       <button type="button" className="wa-button wa-button--primary" disabled={busy}
-        onClick={() => void act("approve_form", { p_form_id: form.id })}>Approve immutable revision</button>
+        onClick={() => void act("approve_form", { p_form_id: form.id })}>Approve form</button>
       {form.revision_number > 1 ? <button type="button" className="wa-button wa-button--quiet" disabled={busy}
-        onClick={() => void act("reject_form_revision", { p_form_id: form.id })}>Reject this revision</button> : null}
+        onClick={() => void act("reject_form_revision", { p_form_id: form.id })}>Discard this version</button> : null}
     </div> : null}
   </>;
 }
@@ -160,11 +164,11 @@ function TypedFieldCard({ field, answer, loaded, template, editing, busy, onEdit
           });
         }}>
           <div className="wa-field">
-            <label className="wa-label" htmlFor={`state-${field.key}`}>Answer state</label>
+            <label className="wa-label" htmlFor={`state-${field.key}`}>Answer</label>
             <div className="wa-select"><select id={`state-${field.key}`} value={draft.state}
               onChange={(event) => setDraft((current) => ({ ...current, state: event.target.value }))}>
-              <option value="known">Known value</option><option value="explicit_none">Explicitly none</option>
-              <option value="unknown">Unknown</option><option value="not_applicable">Not applicable</option>
+              <option value="known">An answer</option><option value="explicit_none">None</option>
+              <option value="unknown">Not known</option><option value="not_applicable">Does not apply</option>
             </select></div>
           </div>
           {draft.state === "known" ? <TypedValueInput field={field} value={draft.value}

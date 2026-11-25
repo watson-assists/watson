@@ -35,7 +35,7 @@ const MESSAGE: Record<string, string> = {
   FORM_REQUIRED_FIELDS_MISSING: "Complete every required field before approving this form.",
   FORM_ATTESTATIONS_MISSING: "Confirm every required safety and consent statement before approving this form.",
   FORM_SIGNATURE_MISSING: "Record the required practitioner signature before approving this form.",
-  FORM_RECONCILIATION_REQUIRED: "Review every difference between live coverage and the final transcript before approval.",
+  FORM_RECONCILIATION_REQUIRED: "Check each question under \u201cCheck these questions\u201d first.",
   ENGINE_CAPABILITY_MISSING: "This worker is not authorized for that processing capability.",
   FORM_JOB_ACTIVE: "Another form revision is already being prepared.",
   NOT_THE_APPROVER: "Only the doctor who approved this form can change it.",
