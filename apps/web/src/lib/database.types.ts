@@ -1087,6 +1087,13 @@ export type Database = {
         }
         Relationships: []
       }
+      practitioner_lessons: {
+        Row: { forgotten_at: string | null; key: string; practitioner_id: string; said: string; seen: number; updated_at: string }
+        ComputedFields: never
+        Insert: { forgotten_at?: string | null; key: string; practitioner_id: string; said: string; seen?: number; updated_at?: string }
+        Update: { forgotten_at?: string | null; key?: string; practitioner_id?: string; said?: string; seen?: number; updated_at?: string }
+        Relationships: []
+      }
       practitioner_profiles: {
         Row: {
           about: string
@@ -1555,6 +1562,8 @@ export type Database = {
       }
     }
     Functions: {
+      engine_save_lessons: { Args: { p_job_id: string; p_lessons: Json }; Returns: Json }
+      forget_lesson: { Args: { p_forget: boolean; p_key: string }; Returns: Json }
       start_form_change: { Args: { p_consultation_id: string }; Returns: Json }
       mark_order_sent: { Args: { p_order_id: string }; Returns: Json }
       open_shop_order: { Args: { p_item_ids: string[]; p_token: string }; Returns: Json }

@@ -36,6 +36,7 @@ from transcribe_bench import opus, wer, words  # noqa: E402
 
 from clinical_worker.config import Settings  # noqa: E402
 from clinical_worker.form import Line, LlamaModel, Template, fill  # noqa: E402
+from clinical_worker.lessons import Edit, derive, render  # noqa: E402
 from clinical_worker.transcribe import SAMPLE_RATE, transcribe_track  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[3]
@@ -43,6 +44,28 @@ CALLS = Path.home() / ".local" / "share" / "watson" / "exam"
 LIVE_PIECES = 4  # per voice: enough for a stable median, a few minutes of processor time
 FLEURS = {"sk": "sk_sk"}  # languages measured on real voices too, and their FLEURS names
 REAL_SENTENCES = 40  # about seven minutes of speech in one track, three minutes to read
+
+
+def habits(template: Template) -> str:
+    """A doctor's habits, one lesson of each kind, made the way the engine makes them
+    (clinical_worker.lessons): a word swapped in two consultations, two questions they clear,
+    one they shorten. Plan step 4: lessons stay only while the form's score with them holds."""
+    edits = [
+        Edit("dosha", "Pitta imbalance", "Pitta vitiation", "c1"),
+        Edit("dosha", "Vata imbalance", "Vata vitiation", "c2"),
+    ] + [
+        Edit(
+            "diet",
+            "Porridge for breakfast, coffee at ten, cold drinks",
+            "Porridge, coffee",
+            f"d{n}",
+        )
+        for n in range(3)
+    ]
+    labels = {field.key: field.label for field in template.fields}
+    lessons = derive(edits, {"exercise": 4, "yoga": 4}, {"exercise": 3, "yoga": 3}, labels)
+    assert len(lessons) == 4, lessons  # noqa: S101 - every kind is in the exam
+    return render(lessons)
 
 
 def call_for(language: str) -> Path:
@@ -165,6 +188,17 @@ def examine(language: str, settings: Settings, model: LlamaModel) -> dict[str, o
     marks = score(case, lines, fill(model, template, lines, case["language"]), show=False)
     result["form_right"] = f"{marks['right']}/{marks['fields']}"
     result["form_invented"] = marks["invented"]
+    taught = score(
+        case,
+        lines,
+        fill(model, template, lines, case["language"], lessons=habits(template)),
+        show=False,
+    )
+    result["form_right_with_lessons"] = f"{taught['right']}/{taught['fields']}"
+    result["form_invented_with_lessons"] = taught["invented"]
+    result["lessons_hold"] = (
+        taught["right"] >= marks["right"] and taught["invented"] <= marks["invented"]
+    )
     return result
 
 

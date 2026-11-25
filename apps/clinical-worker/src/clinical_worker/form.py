@@ -233,6 +233,7 @@ def prompt(
     language: str,
     documents: list[DocumentLine] | None = None,
     notes: str = "",
+    lessons: str = "",
 ) -> tuple[str, str]:
     fields = "\n".join(
         f"{section.title}:\n"
@@ -253,6 +254,7 @@ def prompt(
         user += "\n\nDocuments the patient sent:\n" + "\n".join(
             f"[D{d.number}] {d.file_name}, page {d.page}: {d.text}" for d in documents
         )
+    system += lessons  # the practitioner's habits (clinical_worker.lessons); empty when none
     if notes.strip():
         system += NOTES_RULES
         user += "\n\nThe practitioner's notes:\n" + notes.strip()
@@ -495,8 +497,9 @@ def fill(
     stop: Callable[[], bool] = lambda: False,
     documents: list[DocumentLine] | None = None,
     notes: str = "",
+    lessons: str = "",
 ) -> list[Answer]:
-    system, user = prompt(template, lines, language, documents, notes)
+    system, user = prompt(template, lines, language, documents, notes, lessons)
     raw = model.complete(system, user, schema(template, bool(documents)), stop)
     return parse(raw, template, lines, documents)
 

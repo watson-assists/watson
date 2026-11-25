@@ -21,6 +21,7 @@ from .config import AUDIO_FORMATS, Settings
 from .documents import Reader
 from .errors import ErrorCategory, Stopped, WorkerError
 from .form import Cancelled, Line, LlamaModel, Template, document_lines, fill
+from .lessons import Lesson, learned, render
 from .log import log_event
 from .merge import merge
 from .schema import Speaker, Track, Transcript, TranscriptionModel
@@ -420,6 +421,7 @@ class Engine:
             template = Template.model_validate(job["template"])
             lines = [Line(int(x["position"]), x["speaker"], str(x["text"])) for x in job["lines"]]
             documents = document_lines(job.get("documents") or [])
+            lessons = learned(job.get("history") or {}, template)
             model = self._load_form_model()
             answers = fill(
                 model,
@@ -429,6 +431,7 @@ class Engine:
                 heartbeat.stopped.is_set,
                 documents,
                 str(job.get("notes") or ""),
+                render(lessons),
             )
             answered = sum(1 for a in answers if a.state != "unanswered")
             metrics = {
@@ -464,6 +467,7 @@ class Engine:
                 },
             )
             if answer.get("ok"):
+                self._keep_lessons(job, lessons)
                 log_event(
                     "form.completed",
                     **ids,
@@ -486,6 +490,21 @@ class Engine:
             self._fail_form(job, ErrorCategory.FORM_FAILED, ids, exc)
         finally:
             heartbeat.finish()
+
+    def _keep_lessons(self, job: dict[str, Any], lessons: list[Lesson]) -> None:
+        """What Watson learned, kept for the doctor to see and forget. Best effort only."""
+        try:
+            self.main.rpc(
+                "engine_save_lessons",
+                {
+                    "p_job_id": job["job_id"],
+                    "p_lessons": [
+                        {"key": x.key, "said": x.said, "seen": x.weight} for x in lessons
+                    ],
+                },
+            )
+        except Exception as exc:
+            log_event("lessons.not_kept", exception_type=type(exc).__name__)
 
     def _fail_form(
         self,

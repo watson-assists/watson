@@ -388,6 +388,45 @@ def test_a_transcript_goes_on_to_a_form_the_practitioner_checks_and_approves(
     assert review("age", "reject")["error_category"] == "INVALID_STATE_TRANSITION"
 
 
+class InstructedModel(StandInModel):
+    """The stand-in, keeping the instructions it was given."""
+
+    def __init__(self) -> None:
+        self.systems: list[str] = []
+
+    def complete(self, system: str, user: str, schema: dict[str, Any], stop: Any) -> str:
+        self.systems.append(system)
+        return super().complete(system, user, schema, stop)
+
+
+def test_the_doctors_corrections_become_a_lesson_for_the_next_form(engine: Engine) -> None:
+    """Plan step 4: a word the doctor replaced in two approved forms is a rule for the next form,
+    and the doctor sees it."""
+    erin = _account("erin")  # a doctor of their own: dana let "badly" stand, so no habit there
+    client = erin[2]
+    assert _data(client.rpc("set_form_template", {"p_definition": TEMPLATE}))["ok"]
+    model = InstructedModel()
+    engine.form_model = model  # type: ignore[assignment]
+    rule = 'Write "poorly", not "badly".'
+    for _ in range(2):
+        consultation_id = _queue(erin, SPEECH, SPEECH)
+        assert engine.run_once() and engine.run_once()  # the transcript, then the form
+        form_id = _data(
+            client.table("forms").select("id").eq("consultation_id", consultation_id).single()
+        )["id"]
+        edit = {"p_form_id": form_id, "p_field_key": "age", "p_decision": "edit"}
+        assert _data(
+            client.rpc("review_form_answer", {**edit, "p_text": "Sleeps poorly for three weeks."})
+        )["ok"]
+        assert _data(client.rpc("approve_form", {"p_form_id": form_id}))["ok"]
+    assert rule not in model.systems[-1]  # one consultation is that patient's detail
+    _queue(erin, SPEECH, SPEECH)
+    assert engine.run_once() and engine.run_once()
+    assert rule in model.systems[-1]
+    lessons = _data(client.table("practitioner_lessons").select("key, seen"))
+    assert {"key": "word:badly>poorly", "seen": 2} in lessons
+
+
 def test_a_form_filled_during_the_call_is_a_preview_beside_it_and_the_call_goes_on(
     engine: Engine, dana: tuple[str, str, Client]
 ) -> None:
