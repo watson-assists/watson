@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CircleAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -47,7 +48,7 @@ export default function SignIn() {
     <main className="wa-night">
       <div className="wa-door">
         <header className="wa-door__head">
-          <span className="wa-wordmark">Watson</span>
+          <Link href="/" className="wa-wordmark" aria-label="Watson home">Watson</Link>
           <h1 className="wa-door__title">Every doctor deserves a&nbsp;Watson.</h1>
           <p className="wa-door__lead">You see the patient. Watson does the paperwork.</p>
         </header>

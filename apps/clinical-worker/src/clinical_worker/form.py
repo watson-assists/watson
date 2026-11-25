@@ -400,45 +400,75 @@ def parse(
     return answers
 
 
-def _clean_value(field: TemplateField, value: Any) -> Any:
-    value_type = field.value_type or "text"
-    if value_type in ("text", "long_text", "attachment_reference"):
-        return value.strip()[:4000] if isinstance(value, str) and value.strip() else None
-    if value_type == "date":
-        if not isinstance(value, str):
-            return None
-        try:
-            return date.fromisoformat(value).isoformat()
-        except ValueError:
-            return None
-    if value_type == "integer":
-        return value if isinstance(value, int) and not isinstance(value, bool) else None
-    if value_type == "decimal":
-        return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
-    if value_type in ("boolean", "attestation"):
-        return value if isinstance(value, bool) else None
+def _clean_text(field: TemplateField, value: Any) -> Any:
+    return value.strip()[:4000] if isinstance(value, str) and value.strip() else None
+
+
+def _clean_date(field: TemplateField, value: Any) -> Any:
+    try:
+        return date.fromisoformat(value).isoformat() if isinstance(value, str) else None
+    except ValueError:
+        return None
+
+
+def _clean_integer(field: TemplateField, value: Any) -> Any:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _clean_decimal(field: TemplateField, value: Any) -> Any:
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def _clean_boolean(field: TemplateField, value: Any) -> Any:
+    return value if isinstance(value, bool) else None
+
+
+def _clean_choice(field: TemplateField, value: Any) -> Any:
+    return value if isinstance(value, str) and value in {o.key for o in field.options} else None
+
+
+def _clean_choices(field: TemplateField, value: Any) -> Any:
+    if not isinstance(value, list):
+        return None
     allowed = {option.key for option in field.options}
-    if value_type == "single_choice":
-        return value if isinstance(value, str) and value in allowed else None
-    if value_type == "multi_choice":
-        if not isinstance(value, list):
-            return None
-        selected = list(dict.fromkeys(x for x in value if isinstance(x, str) and x in allowed))
-        return selected or None
-    if value_type == "repeater":
-        if not isinstance(value, list):
-            return None
-        rows: list[dict[str, Any]] = []
-        for raw_row in value[:50]:
-            if not isinstance(raw_row, dict):
-                continue
-            cleaned = {
-                item.key: _clean_value(item, raw_row.get(item.key)) for item in field.item_fields
-            }
-            if any(v is not None for v in cleaned.values()):
-                rows.append({"item_id": str(uuid4()), "values": cleaned})
-        return rows or None
-    return None
+    return list(dict.fromkeys(x for x in value if isinstance(x, str) and x in allowed)) or None
+
+
+def _clean_rows(field: TemplateField, value: Any) -> Any:
+    """Up to 50 entries of a repeated group, each with an id; empty entries are dropped."""
+    if not isinstance(value, list):
+        return None
+    rows: list[dict[str, Any]] = []
+    for raw_row in value[:50]:
+        if not isinstance(raw_row, dict):
+            continue
+        cleaned = {
+            item.key: _clean_value(item, raw_row.get(item.key)) for item in field.item_fields
+        }
+        if any(v is not None for v in cleaned.values()):
+            rows.append({"item_id": str(uuid4()), "values": cleaned})
+    return rows or None
+
+
+# How a value of each type is checked: anything that does not fit becomes None (not answered).
+_CLEANERS: dict[str, Callable[[TemplateField, Any], Any]] = {
+    "text": _clean_text,
+    "long_text": _clean_text,
+    "attachment_reference": _clean_text,
+    "date": _clean_date,
+    "integer": _clean_integer,
+    "decimal": _clean_decimal,
+    "boolean": _clean_boolean,
+    "attestation": _clean_boolean,
+    "single_choice": _clean_choice,
+    "multi_choice": _clean_choices,
+    "repeater": _clean_rows,
+}
+
+
+def _clean_value(field: TemplateField, value: Any) -> Any:
+    cleaner = _CLEANERS.get(field.value_type or "text")
+    return cleaner(field, value) if cleaner else None
 
 
 def _display_value(field: TemplateField, value: Any) -> str | None:

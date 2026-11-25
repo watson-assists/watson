@@ -112,46 +112,7 @@ export function PatientDocuments({ token, whatsappCode, patient, documents, onCh
         )}
       </div>
 
-      {(documents.length > 0 || sending.length > 0) && (
-        <ul className="wa-docs" aria-label="Documents you sent">
-          {documents.map((document) => (
-            <li key={document.id} className="wa-doc">
-              {document.media_type === "application/pdf" ? <FileText aria-hidden className="wa-icon" /> : <ImageIcon aria-hidden className="wa-icon" />}
-              <div className="wa-doc__body">
-                <p className="wa-doc__name">{document.file_name}</p>
-                <p className="wa-doc__meta">{fileSize(document.size_bytes)}</p>
-              </div>
-              <div className="wa-doc__end">
-                {document.removed_at ? (
-                  <span className={`wa-chip ${document.cleanup_completed_at ? "wa-chip--done" : "wa-chip--attention"}`}>
-                    {document.cleanup_completed_at ? "Removed" : "Removal pending"}
-                  </span>
-                ) : (
-                  <span className="wa-chip wa-chip--done"><Check aria-hidden className="wa-icon wa-icon--sm" />Sent</span>
-                )}
-                {(!document.removed_at || !document.cleanup_completed_at) && (
-                  <button type="button" className="wa-button wa-button--quiet wa-button--small" aria-label={
-                    document.removed_at ? `Retry removal of ${document.file_name}` : `Remove ${document.file_name}`
-                  } onClick={() => remove(document)}>
-                    {document.removed_at ? "Retry removal" : "Remove"}
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
-          {sending.map((fileName) => (
-            <li key={fileName} className="wa-doc" aria-busy="true">
-              <FileText aria-hidden className="wa-icon" />
-              <div className="wa-doc__body">
-                <p className="wa-doc__name">{fileName}</p>
-                <p className="wa-doc__meta">Sending…</p>
-              </div>
-              <div className="wa-doc__end" />
-              <div className="wa-bar" aria-hidden />
-            </li>
-          ))}
-        </ul>
-      )}
+      {(documents.length > 0 || sending.length > 0) && <SentList documents={documents} sending={sending} onRemove={(document) => void remove(document)} />}
 
       <div className="wa-actions">
         <button type="button" className="wa-button wa-button--secondary" disabled={sending.length > 0} onClick={() => files.current?.click()}>
@@ -164,16 +125,67 @@ export function PatientDocuments({ token, whatsappCode, patient, documents, onCh
         <input ref={camera} type="file" accept="image/*" capture="environment" hidden aria-label="Photo to send" onChange={send} />
       </div>
       {problem && <Notice tone="failed" title="Not sent">{problem}</Notice>}
-      <div className="wa-whatsapp">
-        <p className="wa-text" style={{ margin: 0 }}>On your phone? Send them on WhatsApp instead. Watson answers there with your link.</p>
-        <a className="wa-button wa-button--secondary" target="_blank" rel="noopener noreferrer"
-          href={whatsappLink(watson, `Watson ${whatsappCode}`)}>
-          <MessageCircle aria-hidden className="wa-icon" />Message Watson on WhatsApp
-        </a>
-      </div>
+      <WhatsAppInstead number={watson} code={whatsappCode} />
       <p className="wa-hint" style={{ display: "flex", gap: 6, alignItems: "center" }}>
         <Lock aria-hidden className="wa-icon wa-icon--sm" />PDF or photo, up to 10 MB each. Only your practitioner can open them.
       </p>
     </section>
+  );
+}
+
+/** The documents the patient sent, and those still on their way. */
+function SentList({ documents, sending, onRemove }: { documents: SentDocument[]; sending: string[]; onRemove: (document: SentDocument) => void }) {
+  return (
+    <ul className="wa-docs" aria-label="Documents you sent">
+      {documents.map((document) => (
+        <li key={document.id} className="wa-doc">
+          {document.media_type === "application/pdf" ? <FileText aria-hidden className="wa-icon" /> : <ImageIcon aria-hidden className="wa-icon" />}
+          <div className="wa-doc__body">
+            <p className="wa-doc__name">{document.file_name}</p>
+            <p className="wa-doc__meta">{fileSize(document.size_bytes)}</p>
+          </div>
+          <div className="wa-doc__end">
+            {document.removed_at ? (
+              <span className={`wa-chip ${document.cleanup_completed_at ? "wa-chip--done" : "wa-chip--attention"}`}>
+                {document.cleanup_completed_at ? "Removed" : "Removal pending"}
+              </span>
+            ) : (
+              <span className="wa-chip wa-chip--done"><Check aria-hidden className="wa-icon wa-icon--sm" />Sent</span>
+            )}
+            {(!document.removed_at || !document.cleanup_completed_at) && (
+              <button type="button" className="wa-button wa-button--quiet wa-button--small" aria-label={
+                document.removed_at ? `Retry removal of ${document.file_name}` : `Remove ${document.file_name}`
+              } onClick={() => onRemove(document)}>
+                {document.removed_at ? "Retry removal" : "Remove"}
+              </button>
+            )}
+          </div>
+        </li>
+      ))}
+      {sending.map((fileName) => (
+        <li key={fileName} className="wa-doc" aria-busy="true">
+          <FileText aria-hidden className="wa-icon" />
+          <div className="wa-doc__body">
+            <p className="wa-doc__name">{fileName}</p>
+            <p className="wa-doc__meta">Sending…</p>
+          </div>
+          <div className="wa-doc__end" />
+          <div className="wa-bar" aria-hidden />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** On a phone, WhatsApp is the easier way to send documents. */
+function WhatsAppInstead({ number, code }: { number: string; code: string }) {
+  return (
+    <div className="wa-whatsapp">
+      <p className="wa-text" style={{ margin: 0 }}>On your phone? Send them on WhatsApp instead. Watson answers there with your link.</p>
+      <a className="wa-button wa-button--secondary" target="_blank" rel="noopener noreferrer"
+        href={whatsappLink(number, `Watson ${code}`)}>
+        <MessageCircle aria-hidden className="wa-icon" />Message Watson on WhatsApp
+      </a>
+    </div>
   );
 }

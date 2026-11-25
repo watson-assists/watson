@@ -8,6 +8,7 @@ import { livePieceSender } from "./live";
 import { supabase } from "./supabase";
 import { attachAudio } from "./tracks";
 import { useCallMedia } from "./use-call-media";
+import { useLeaveGuard } from "./use-leave-guard";
 
 /**
  * The doctor's side of a video call: start it, record both voices once the patient agrees on their
@@ -30,14 +31,10 @@ export function useDoctorCall(consultationId: string, userId: string) {
   useEffect(() => {
     if (!live) return;
     const tick = setInterval(() => setElapsed(recorder.current?.seconds ?? 0), 1000);
-    // Leaving the page mid-call would lose the recording.
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
-    window.addEventListener("beforeunload", warn);
-    return () => {
-      clearInterval(tick);
-      window.removeEventListener("beforeunload", warn);
-    };
+    return () => clearInterval(tick);
   }, [live]);
+  // Leaving the page mid-call would lose the recording.
+  useLeaveGuard(live, "Leave the call? It ends, and what was recorded so far is not saved. To keep it, stay and press End call.");
   useEffect(() => () => void session.current?.leave(), []);
 
   const patientAgreed = async () => {

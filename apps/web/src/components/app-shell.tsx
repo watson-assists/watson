@@ -8,9 +8,10 @@ import type { ReactNode } from "react";
 import { loginName } from "@/lib/session";
 import { supabase } from "@/lib/supabase";
 
+// Each place in the menu, and the pages that belong to it: everything reached from Home is under Home.
 const NAV = [
-  { href: "/consultations/", label: "Home", Icon: House },
-  { href: "/calendar/", label: "Practice", Icon: CalendarDays },
+  { href: "/consultations/", label: "Home", Icon: House, within: ["/consultation", "/form/", "/room/", "/print/"] },
+  { href: "/calendar/", label: "Practice", Icon: CalendarDays, within: ["/calendar/"] },
 ];
 
 /** Frame for every signed-in screen: the way around, who is signed in, and a way out. */
@@ -22,8 +23,8 @@ export function AppShell({ user, children }: { user: User; children: ReactNode }
         <div className="wa-header__inner">
           <Link href="/consultations/" className="wa-wordmark" aria-label="Watson, home">Watson</Link>
           <nav className="wa-nav" aria-label="Main">
-            {NAV.map(({ href, label, Icon }) => (
-              <Link key={href} href={href} aria-current={path === href ? "page" : undefined}>
+            {NAV.map(({ href, label, Icon, within }) => (
+              <Link key={href} href={href} aria-current={path === href ? "page" : within.some((start) => path.startsWith(start)) ? "true" : undefined}>
                 <Icon aria-hidden className="wa-icon wa-icon--sm" />{label}
               </Link>
             ))}

@@ -117,10 +117,7 @@ function ConsultationScreen({ loaded, userId, reload }: { loaded: Loaded; userId
       ) : <Journey status={status} lines={stepLines(loaded)} />}
       {problem && <Notice tone="failed" title="That did not work">{problem}</Notice>}
       <NextStep loaded={loaded} actions={actions} notes={notes} />
-      {(status === "transcription_processing" || status === "transcription_failed") && (
-        <JobPanel consultationId={consultation.id} status={status} onChanged={reload} />
-      )}
-      {FORM_STATUSES.includes(status) && <FormPanel consultationId={consultation.id} status={status} onChanged={reload} />}
+      <WatsonsWork loaded={loaded} reload={reload} />
       {!unrecorded && open && notes}
       {shown?.check && <PatientCheck consultationId={consultation.id} shown={shown} candidate={candidate} onChanged={reload} />}
       {open && <PatientPanel consultation={consultation} patient={shown} onChanged={reload} />}
@@ -137,4 +134,13 @@ function ConsultationScreen({ loaded, userId, reload }: { loaded: Loaded; userId
       {(status === "transcription_processing" || HAS_TRANSCRIPT.includes(status)) && tracks.length > 0 && <AudioSummary loaded={loaded} />}
     </>
   );
+}
+
+/** What Watson is doing for this consultation: the transcript, then the form. */
+function WatsonsWork({ loaded, reload }: { loaded: Loaded; reload: () => void }) {
+  const { id, status } = loaded.consultation;
+  if (status === "transcription_processing" || status === "transcription_failed") {
+    return <JobPanel consultationId={id} status={status} onChanged={reload} />;
+  }
+  return FORM_STATUSES.includes(status) ? <FormPanel consultationId={id} status={status} onChanged={reload} /> : null;
 }

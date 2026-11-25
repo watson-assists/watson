@@ -5,7 +5,7 @@ import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type UseFormReturn } from "react-hook-form";
 import { z } from "@/lib/zod";
 import { AppShell } from "@/components/app-shell";
 import { FieldError, Notice } from "@/components/status";
@@ -51,17 +51,11 @@ function NewConsultation() {
   const [failure, setFailure] = useState<string | null>(null);
   const [known, setKnown] = useState<Known[]>([]);
   const [templates, setTemplates] = useState<TemplateVersion[]>([]);
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    getValues,
-    setError,
-    formState: { errors, isSubmitting },
-  } = useForm<Values>({
+  const form = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: { day: "", clock: "", language: "en", consent_recorded: true, scenario_notes: "", fee: "", patient_name: "", patient_contact: "", form_template_version_id: "" },
   });
+  const { register, handleSubmit, setValue, getValues, setError, formState: { errors, isSubmitting } } = form;
 
   useEffect(() => {
     // Patients seen before, suggested as the name is typed. Row-level security keeps them the practitioner's own.
@@ -112,62 +106,9 @@ function NewConsultation() {
       <div className="wa-split">
         <form onSubmit={handleSubmit(create)} noValidate className="wa-panel" aria-label="Consultation details">
           <div className="wa-form">
-            <fieldset className="wa-form" style={{ border: 0, margin: 0, padding: 0 }}>
-              <legend className="wa-label" style={{ marginBottom: 4 }}>Patient</legend>
-              <p className="wa-hint" id="patient-hint" style={{ marginTop: -8 }}>
-                Start typing to choose someone you have seen before. A name and phone number or email are required.
-              </p>
-              <div className="wa-fields-row">
-                <div className="wa-field">
-                  <label className="wa-label" htmlFor="patient-name">Patient&apos;s name</label>
-                  <input id="patient-name" className="wa-input" list="patients" autoComplete="off"
-                    aria-invalid={Boolean(errors.patient_name)} aria-describedby="patient-hint patient-name-error"
-                    {...register("patient_name", {
-                      onChange: (event) => {
-                        const seen = known.find((patient) => patient.name === event.target.value);
-                        if (seen && !getValues("patient_contact")) setValue("patient_contact", seen.phone ?? seen.email ?? "");
-                      },
-                    })} />
-                  <datalist id="patients">
-                    {known.map((patient) => <option key={`${patient.name}-${patient.phone ?? patient.email}`} value={patient.name}>{patient.phone ?? patient.email}</option>)}
-                  </datalist>
-                  <FieldError id="patient-name-error" message={errors.patient_name?.message} />
-                </div>
-                <div className="wa-field">
-                  <label className="wa-label" htmlFor="patient-contact">Phone or email</label>
-                  <input id="patient-contact" className="wa-input" autoComplete="off" placeholder="+421 905 123 456"
-                    aria-invalid={Boolean(errors.patient_contact)} aria-describedby="patient-contact-error" {...register("patient_contact")} />
-                  <FieldError id="patient-contact-error" message={errors.patient_contact?.message} />
-                </div>
-              </div>
-            </fieldset>
+            <PatientFields form={form} known={known} />
 
-            <div className="wa-fields-row">
-              <div className="wa-field">
-                <label className="wa-label" htmlFor="day">Date</label>
-                <input id="day" type="date" className="wa-input" autoComplete="off" aria-invalid={Boolean(errors.day)}
-                  aria-describedby="day-error" {...register("day")} />
-                <FieldError id="day-error" message={errors.day?.message} />
-              </div>
-              <div className="wa-field">
-                <label className="wa-label" htmlFor="clock">Time</label>
-                <input id="clock" type="time" className="wa-input" autoComplete="off" aria-invalid={Boolean(errors.clock)}
-                  aria-describedby="clock-error" {...register("clock")} />
-                <FieldError id="clock-error" message={errors.clock?.message} />
-              </div>
-              <div className="wa-field">
-                <label className="wa-label" htmlFor="language">Language spoken</label>
-                <div className="wa-select">
-                  <select id="language" aria-invalid={Boolean(errors.language)}
-                    aria-describedby="language-hint language-error" {...register("language")}>
-                    {Object.entries(LANGUAGE_LABEL).map(([code, label]) => (
-                      <option key={code} value={code}>{label}</option>
-                    ))}
-                  </select>
-                </div>
-                <FieldError id="language-error" message={errors.language?.message} />
-              </div>
-            </div>
+            <WhenFields form={form} />
 
             <div className="wa-field">
               <label className="wa-label" htmlFor="form-template">Consultation form</label>
@@ -222,17 +163,92 @@ function NewConsultation() {
             </div>
           </div>
         </form>
-        <aside className="wa-aside" aria-labelledby="next-title">
-          <h2 className="wa-heading" id="next-title" style={{ color: "var(--ink)" }}>What happens next</h2>
-          <ol>
-            <li>Watson numbers the consultation and remembers the patient: next time, start typing their name.</li>
-            <li>Send the patient their link. If you set a fee, they pay it there.</li>
-            <li>Start the video call. Both voices are recorded.</li>
-            <li>When you end the call, Watson writes the transcript and fills in your form.</li>
-            <li>Check each answer against its quote, then approve.</li>
-          </ol>
-        </aside>
+        <WhatHappensNext />
       </div>
     </>
+  );
+}
+
+/** Who the patient is: someone seen before (suggested as the name is typed), or someone new. */
+function PatientFields({ form, known }: { form: UseFormReturn<Values>; known: Known[] }) {
+  const { register, getValues, setValue, formState: { errors } } = form;
+  return (
+    <fieldset className="wa-form" style={{ border: 0, margin: 0, padding: 0 }}>
+      <legend className="wa-label" style={{ marginBottom: 4 }}>Patient</legend>
+      <p className="wa-hint" id="patient-hint" style={{ marginTop: -8 }}>
+        Start typing to choose someone you have seen before. A name and phone number or email are required.
+      </p>
+      <div className="wa-fields-row">
+        <div className="wa-field">
+          <label className="wa-label" htmlFor="patient-name">Patient&apos;s name</label>
+          <input id="patient-name" className="wa-input" list="patients" autoComplete="off"
+            aria-invalid={Boolean(errors.patient_name)} aria-describedby="patient-hint patient-name-error"
+            {...register("patient_name", {
+              onChange: (event) => {
+                const seen = known.find((patient) => patient.name === event.target.value);
+                if (seen && !getValues("patient_contact")) setValue("patient_contact", seen.phone ?? seen.email ?? "");
+              },
+            })} />
+          <datalist id="patients">
+            {known.map((patient) => <option key={`${patient.name}-${patient.phone ?? patient.email}`} value={patient.name}>{patient.phone ?? patient.email}</option>)}
+          </datalist>
+          <FieldError id="patient-name-error" message={errors.patient_name?.message} />
+        </div>
+        <div className="wa-field">
+          <label className="wa-label" htmlFor="patient-contact">Phone or email</label>
+          <input id="patient-contact" className="wa-input" autoComplete="off" placeholder="+421 905 123 456"
+            aria-invalid={Boolean(errors.patient_contact)} aria-describedby="patient-contact-error" {...register("patient_contact")} />
+          <FieldError id="patient-contact-error" message={errors.patient_contact?.message} />
+        </div>
+      </div>
+    </fieldset>
+  );
+}
+
+/** When the consultation is, and the language spoken. */
+function WhenFields({ form }: { form: UseFormReturn<Values> }) {
+  const { register, formState: { errors } } = form;
+  return (
+    <div className="wa-fields-row">
+      <div className="wa-field">
+        <label className="wa-label" htmlFor="day">Date</label>
+        <input id="day" type="date" className="wa-input" autoComplete="off" aria-invalid={Boolean(errors.day)}
+          aria-describedby="day-error" {...register("day")} />
+        <FieldError id="day-error" message={errors.day?.message} />
+      </div>
+      <div className="wa-field">
+        <label className="wa-label" htmlFor="clock">Time</label>
+        <input id="clock" type="time" className="wa-input" autoComplete="off" aria-invalid={Boolean(errors.clock)}
+          aria-describedby="clock-error" {...register("clock")} />
+        <FieldError id="clock-error" message={errors.clock?.message} />
+      </div>
+      <div className="wa-field">
+        <label className="wa-label" htmlFor="language">Language spoken</label>
+        <div className="wa-select">
+          <select id="language" aria-invalid={Boolean(errors.language)}
+            aria-describedby="language-hint language-error" {...register("language")}>
+            {Object.entries(LANGUAGE_LABEL).map(([code, label]) => (
+              <option key={code} value={code}>{label}</option>
+            ))}
+          </select>
+        </div>
+        <FieldError id="language-error" message={errors.language?.message} />
+      </div>
+    </div>
+  );
+}
+
+function WhatHappensNext() {
+  return (
+    <aside className="wa-aside" aria-labelledby="next-title">
+      <h2 className="wa-heading" id="next-title" style={{ color: "var(--ink)" }}>What happens next</h2>
+      <ol>
+        <li>Watson numbers the consultation and remembers the patient: next time, start typing their name.</li>
+        <li>Send the patient their link. If you set a fee, they pay it there.</li>
+        <li>Start the video call. Both voices are recorded.</li>
+        <li>When you end the call, Watson writes the transcript and fills in your form.</li>
+        <li>Check each answer against its quote, then approve.</li>
+      </ol>
+    </aside>
   );
 }

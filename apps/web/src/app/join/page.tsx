@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { PatientCall, PayStep, type Details } from "@/components/join-parts";
@@ -15,7 +16,7 @@ export default function JoinPage() {
   return (
     <>
       <header className="wa-header">
-        <div className="wa-header__inner"><span className="wa-wordmark">Watson</span></div>
+        <div className="wa-header__inner"><Link href="/" className="wa-wordmark" aria-label="Watson, find a practitioner">Watson</Link></div>
       </header>
       <main className="wa-page">
         <Suspense fallback={<p className="wa-meta" role="status">Opening the call…</p>}>

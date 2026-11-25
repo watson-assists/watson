@@ -37,51 +37,49 @@ export const isTypedFormTemplate = (template: FormTemplate) =>
 export const translated = (fallback: string, text: Localized | undefined, language: OutputLanguage) =>
   language === "both" ? fallback : text?.[language] ?? fallback;
 
+const STATE_TEXT: Record<string, Localized> = {
+  unanswered: { en: "Not answered", sk: "Nezodpovedané" },
+  explicit_none: { en: "Explicitly none", sk: "Výslovne žiadne" },
+  unknown: { en: "Unknown", sk: "Neznáme" },
+  not_applicable: { en: "Not applicable", sk: "Nevzťahuje sa" },
+};
+const inLanguage = (text: Localized, language: OutputLanguage) => language === "both" ? `${text.en} / ${text.sk}` : text[language];
+const optionLabel = (field: FormField, key: unknown, language: OutputLanguage) => {
+  const option = field.options?.find((item) => item.key === key);
+  return option ? translated(option.label, option.label_i18n, language) : String(key);
+};
+
+/** One entry of a repeated group ("Medicine: Omeprazole · Dose: 20 mg"). */
+function repeaterRow(field: FormField, row: unknown, language: OutputLanguage): string {
+  const values = (row as { values?: Record<string, unknown> }).values ?? {};
+  if (!field.item_fields?.length) return Object.values(values).filter((item) => item !== null).join(" · ");
+  return field.item_fields.flatMap((item) => {
+    const itemValue = values[item.key];
+    if (itemValue === null || itemValue === undefined || itemValue === "") return [];
+    const shown = answerText({ field_key: item.key, machine_text: null, practitioner_text: null,
+      review: "accepted", answer_state: "known", machine_value: itemValue }, item, language);
+    return [`${translated(item.label, item.label_i18n, language)}: ${shown}`];
+  }).join(" · ");
+}
+
+/** A typed value in words: the option's label, yes or no, a repeated group, or the value itself. */
+function valueText(value: unknown, field: FormField | undefined, language: OutputLanguage): string {
+  switch (field?.value_type) {
+    case "single_choice": return optionLabel(field, value, language);
+    case "multi_choice": if (Array.isArray(value)) return value.map((key) => optionLabel(field, key, language)).join(", "); break;
+    case "boolean": return inLanguage(value ? { en: "Yes", sk: "Áno" } : { en: "No", sk: "Nie" }, language);
+    case "repeater": if (Array.isArray(value)) return value.map((row) => repeaterRow(field, row, language)).filter(Boolean).join("; "); break;
+  }
+  return typeof value === "string" ? value : JSON.stringify(value);
+}
+
 export const answerText = (answer: FormAnswer | undefined, field?: FormField,
   language: OutputLanguage = "both"): string => {
   if (!answer || answer.review === "rejected") return "";
   const state = answer.answer_state;
-  if (field?.value_type && state && state !== "known") {
-    const stateText = ({
-    unanswered: { en: "Not answered", sk: "Nezodpovedané" },
-    explicit_none: { en: "Explicitly none", sk: "Výslovne žiadne" },
-    unknown: { en: "Unknown", sk: "Neznáme" },
-    not_applicable: { en: "Not applicable", sk: "Nevzťahuje sa" },
-    } as Record<string, Localized>)[state];
-    return !stateText ? state : language === "both"
-      ? `${stateText.en} / ${stateText.sk}` : stateText[language];
-  }
+  if (field?.value_type && state && state !== "known") return STATE_TEXT[state] ? inLanguage(STATE_TEXT[state], language) : state;
   const value = answer.review === "edited" ? answer.practitioner_value : answer.machine_value;
-  if (value !== undefined && value !== null) {
-    if (field?.value_type === "single_choice") {
-      const option = field.options?.find((item) => item.key === value);
-      return option ? translated(option.label, option.label_i18n, language) : String(value);
-    }
-    if (field?.value_type === "multi_choice" && Array.isArray(value)) {
-      return value.map((key) => {
-        const option = field.options?.find((item) => item.key === key);
-        return option ? translated(option.label, option.label_i18n, language) : String(key);
-      }).join(", ");
-    }
-    if (field?.value_type === "boolean") {
-      const labels = value ? { en: "Yes", sk: "Áno" } : { en: "No", sk: "Nie" };
-      return language === "both" ? `${labels.en} / ${labels.sk}` : labels[language];
-    }
-    if (field?.value_type === "repeater" && Array.isArray(value)) return value.map((row) => {
-      const values = (row as { values?: Record<string, unknown> }).values ?? {};
-      if (!field.item_fields?.length) {
-        return Object.values(values).filter((item) => item !== null).join(" · ");
-      }
-      return field.item_fields.flatMap((item) => {
-        const itemValue = values[item.key];
-        if (itemValue === null || itemValue === undefined || itemValue === "") return [];
-        const shown = answerText({ field_key: item.key, machine_text: null, practitioner_text: null,
-          review: "accepted", answer_state: "known", machine_value: itemValue }, item, language);
-        return [`${translated(item.label, item.label_i18n, language)}: ${shown}`];
-      }).join(" · ");
-    }).filter(Boolean).join("; ");
-    return typeof value === "string" ? value : JSON.stringify(value);
-  }
+  if (value !== undefined && value !== null) return valueText(value, field, language);
   return answer.practitioner_text ?? answer.machine_text ?? "";
 };
 

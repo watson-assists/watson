@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { explain } from "./api";
 import { admitToCall, connect, type CallState } from "./call";
 import { useCallMedia } from "./use-call-media";
+import { useLeaveGuard } from "./use-leave-guard";
 
 /** The patient's side of a video call: admitted on their link, then the camera, then the call. */
 export function usePatientCall(token: string) {
@@ -12,6 +13,7 @@ export function usePatientCall(token: string) {
   const [problem, setProblem] = useState<string | null>(null);
   const session = useRef<{ leave(): Promise<void> } | null>(null);
   useEffect(() => () => void session.current?.leave(), []);
+  useLeaveGuard(state !== null && state !== "ended", "Leave the consultation? The call ends for you.");
 
   async function join() {
     setProblem(null);

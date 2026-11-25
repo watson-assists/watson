@@ -94,31 +94,37 @@ export function PatientCall({ token, details, onAnswered }: { token: string; det
         </Notice>
       )}
       {state === null && (details.recording === null || asking) && <RecordingQuestion practitioner={details.practitioner} onAnswer={(agree) => void answer(agree)} />}
-      {state === null && details.recording !== null && !asking && (
-        <p className="wa-meta" style={{ margin: 0 }}>
-          {details.recording === "agreed" ? "You agreed to this call being recorded." : "This call will not be recorded."}{" "}
-          <button type="button" className="wa-button wa-button--quiet wa-button--small" onClick={() => setAsking(true)}>Change your answer</button>
-        </p>
-      )}
+      {state === null && details.recording !== null && !asking && <RecordingAnswer agreed={details.recording === "agreed"} onChange={() => setAsking(true)} />}
       <div className="wa-call">
         <CallScreen remoteVideo={media.remoteVideo} localVideo={media.localVideo} remoteLabel="Your practitioner" selfHidden={state === null}
-          note={state === "connected" ? null : [state === null ? "Turn on your camera and microphone to join."
-            : state === "ended" ? "The consultation has ended. You can close this page." : NOTE[state] ?? ""]}
-          badge={state === "connected" && (details.recording === "agreed"
-            ? <span className="wa-live" role="status">Recorded</span>
-            : <span className="wa-live wa-live--off" role="status">Not recorded</span>)} />
+          note={patientNote(state)} badge={state === "connected" && <RecordedBadge agreed={details.recording === "agreed"} />} />
         <div className="wa-call__bar">
           {state === null ? details.recording !== null && !asking && (
             <button type="button" className="wa-button wa-button--primary" onClick={() => void join()}>
               <Video aria-hidden className="wa-icon" />Join the call
             </button>
-          ) : live ? (
-            <CallControls muted={media.muted} cameraOff={media.cameraOff} onToggle={media.toggle} onEnd={() => void leave()} endLabel="Leave" />
-          ) : null}
+          ) : live && <CallControls muted={media.muted} cameraOff={media.cameraOff} onToggle={media.toggle} onEnd={() => void leave()} endLabel="Leave" />}
         </div>
         {problem && <Notice tone="failed" title="Could not join">{problem}</Notice>}
       </div>
     </>
+  );
+}
+
+/** What the patient's screen says until the call connects. */
+const patientNote = (state: CallState | null): [string] | null => state === "connected" ? null
+  : [state === null ? "Turn on your camera and microphone to join." : state === "ended" ? "The consultation has ended. You can close this page." : NOTE[state] ?? ""];
+
+function RecordedBadge({ agreed }: { agreed: boolean }) {
+  return agreed ? <span className="wa-live" role="status">Recorded</span> : <span className="wa-live wa-live--off" role="status">Not recorded</span>;
+}
+
+function RecordingAnswer({ agreed, onChange }: { agreed: boolean; onChange: () => void }) {
+  return (
+    <p className="wa-meta" style={{ margin: 0 }}>
+      {agreed ? "You agreed to this call being recorded." : "This call will not be recorded."}{" "}
+      <button type="button" className="wa-button wa-button--quiet wa-button--small" onClick={onChange}>Change your answer</button>
+    </p>
   );
 }
 

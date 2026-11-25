@@ -35,22 +35,19 @@ export async function loadRecords(consultationId?: string): Promise<Consultation
   const rowsOf = (rows.data ?? []) as unknown as Row[];
   const earlier = await earlierPatients(rowsOf);
   return rowsOf.map((row) => {
-    const form = byConsultation.get(row.id);
     const person = shownPatient(row, earlier);
-    return {
-      patient: person?.name ?? row.synthetic_patient_ref,
-      contact: person?.phone ?? person?.email ?? "",
-      scheduledAt: row.scheduled_at, practitioner,
-      approvedAt: form?.approved_at ?? null,
-      template: (form?.template as FormTemplate | undefined) ?? null,
-      answers: form?.form_answers ?? [],
-      revision: form?.revision_number ?? null,
-      revisionKind: form?.revision_kind ?? null,
-      templateHash: form?.template_hash ?? null,
-      signatures: form?.form_signatures ?? [],
-    };
+    return { patient: person?.name ?? row.synthetic_patient_ref, contact: contactOf(person),
+      scheduledAt: row.scheduled_at, practitioner, ...formPart(byConsultation.get(row.id)) };
   });
 }
+
+const contactOf = (person: Person | null | undefined) => person?.phone ?? person?.email ?? "";
+
+/** The current form of a consultation, as a record carries it; empty when there is none yet. */
+const formPart = (form: Form | undefined) => form ? {
+  approvedAt: form.approved_at, template: form.template as FormTemplate, answers: form.form_answers,
+  revision: form.revision_number, revisionKind: form.revision_kind, templateHash: form.template_hash, signatures: form.form_signatures,
+} : { approvedAt: null, template: null, answers: [], revision: null, revisionKind: null, templateHash: null, signatures: [] };
 
 /** The practitioner's own patients that consultations from before the patient check were linked to, by id. */
 export async function earlierPatients(rows: PatientColumns[]): Promise<Map<string, Person>> {

@@ -63,7 +63,11 @@ line-length = 100
 filterwarnings = ["ignore::DeprecationWarning:supabase.*"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "S"]
+# C901, PLR0912, PLR0915: no god functions (owner, 24 Nov 2026); raise a limit only with a reason beside it.
+select = ["E", "F", "I", "B", "UP", "S", "C901", "PLR0912", "PLR0915"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
 
 
 [tool.mypy]

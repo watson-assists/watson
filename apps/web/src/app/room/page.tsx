@@ -91,28 +91,12 @@ function CallRoom({ loaded, userId, back }: { loaded: Loaded; userId: string; ba
       </div>
       <div className="wa-room">
       <div className="wa-call">
-        {link && (
-          <div className="wa-field">
-            <label className="wa-label" htmlFor="invite">Send this link to the patient</label>
-            <div className="wa-invite">
-              <input id="invite" className="wa-input" readOnly value={link} onFocus={(event) => event.target.select()} />
-              <CopyButton text={link} />
-            </div>
-          </div>
-        )}
+        {link && <InviteLink link={link} />}
         <CallScreen remoteVideo={media.remoteVideo} localVideo={media.localVideo} remoteLabel="The patient" selfHidden={state === null}
           note={state !== "connected" ? note ?? null : null}
           badge={live && (call.recording ? <span className="wa-live" role="status">Recording {clock(call.elapsed)}</span>
             : call.declined ? <span className="wa-live wa-live--off" role="status">Not recorded</span> : null)} />
-        <div className="wa-call__bar">
-          {state === null && !step ? (
-            <button type="button" className="wa-button wa-button--primary" onClick={() => void call.start(consultation.invite_token)}>
-              <Video aria-hidden className="wa-icon" />Start video call
-            </button>
-          ) : live && !step ? (
-            <CallControls muted={media.muted} cameraOff={media.cameraOff} onToggle={media.toggle} onEnd={() => void call.end()} endLabel="End call" />
-          ) : null}
-        </div>
+        <CallBar call={call} onStart={() => void call.start(consultation.invite_token)} />
         {step && <p className="wa-meta" role="status" style={{ textAlign: "center" }}>{step}</p>}
         {problem && (
           <Notice tone="failed" title="That did not work" actions={unsaved && (
@@ -132,5 +116,33 @@ function CallRoom({ loaded, userId, back }: { loaded: Loaded; userId: string; ba
       )}
       </div>
     </>
+  );
+}
+
+function InviteLink({ link }: { link: string }) {
+  return (
+    <div className="wa-field">
+      <label className="wa-label" htmlFor="invite">Send this link to the patient</label>
+      <div className="wa-invite">
+        <input id="invite" className="wa-input" readOnly value={link} onFocus={(event) => event.target.select()} />
+        <CopyButton text={link} />
+      </div>
+    </div>
+  );
+}
+
+/** Start the call; during it, mute, the camera and ending it; nothing while it ends or saves. */
+function CallBar({ call, onStart }: { call: ReturnType<typeof useDoctorCall>; onStart: () => void }) {
+  const { media, state, live, step } = call;
+  return (
+    <div className="wa-call__bar">
+      {state === null && !step ? (
+        <button type="button" className="wa-button wa-button--primary" onClick={onStart}>
+          <Video aria-hidden className="wa-icon" />Start video call
+        </button>
+      ) : live && !step ? (
+        <CallControls muted={media.muted} cameraOff={media.cameraOff} onToggle={media.toggle} onEnd={() => void call.end()} endLabel="End call" />
+      ) : null}
+    </div>
   );
 }
