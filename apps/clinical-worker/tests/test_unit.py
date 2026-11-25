@@ -728,3 +728,25 @@ def test_published_massage_template_matches_the_worker_schema() -> None:
     }
     assert len(template.approval_gates) == 6
     assert template.approval_gates[-1].signer_role == "practitioner"
+
+
+def test_pieces_read_together_get_back_the_words_said_in_each() -> None:
+    """Owner, 25 Nov: one voice's waiting live pieces are read in one pass, then split again."""
+    from clinical_worker.transcribe import SAMPLE_RATE, RawSegment, TrackTranscription, said_in_each
+
+    def said(start: float, end: float, text: str, noise: bool = False) -> RawSegment:
+        return RawSegment(start, end, text, 0.9, noise)
+
+    heard = TrackTranscription(
+        segments=[
+            said(0.2, 3.0, "I sleep badly."),
+            said(3.1, 4.0, "Mm.", noise=True),  # possibly not speech: left out
+            said(4.5, 5.5, "Since May."),  # middle 5.0: exactly where the second piece begins
+            said(11.0, 13.0, "Three weeks."),  # middle 12.0, the very end: still the last piece
+        ],
+        language="en",
+        language_probability=None,
+        duration_seconds=12.0,
+    )
+    lengths = [5 * SAMPLE_RATE, 2 * SAMPLE_RATE, 5 * SAMPLE_RATE]
+    assert said_in_each(heard, lengths) == ["I sleep badly.", "Since May.", "Three weeks."]

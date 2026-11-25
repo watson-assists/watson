@@ -1662,6 +1662,7 @@ export type Database = {
       engine_claim_form_job: { Args: Record<PropertyKey, never>; Returns: Json }
       engine_claim_job: { Args: Record<PropertyKey, never>; Returns: Json }
       engine_claim_live_piece: { Args: Record<PropertyKey, never>; Returns: Json }
+      engine_claim_next_live_pieces: { Args: { p_after: string }; Returns: Json }
       engine_claim_voice_note: { Args: Record<PropertyKey, never>; Returns: Json }
       engine_voice_note_done: { Args: { p_id: string; p_text: string }; Returns: Json }
       engine_voice_note_failed: { Args: { p_id: string }; Returns: Json }

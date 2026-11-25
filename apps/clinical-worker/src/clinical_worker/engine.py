@@ -14,6 +14,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+from faster_whisper import decode_audio
 from supabase import Client, ClientOptions, create_client
 
 from .audio import audio_duration_seconds
@@ -25,7 +27,13 @@ from .lessons import Lesson, learned, render
 from .log import log_event
 from .merge import merge
 from .schema import Speaker, Track, Transcript, TranscriptionModel
-from .transcribe import TrackTranscription, model_revision, transcribe_track
+from .transcribe import (
+    SAMPLE_RATE,
+    TrackTranscription,
+    model_revision,
+    said_in_each,
+    transcribe_track,
+)
 
 SPEAKERS: tuple[Speaker, Speaker] = ("practitioner", "patient")
 
@@ -269,27 +277,34 @@ class Engine:
         return False
 
     def process_live_piece(self, piece: dict[str, Any]) -> None:
-        """Ten seconds of one voice during the call: its text for the call screen (owner, 24 Oct).
-        The piece is removed either way; the transcript after the call uses the full recordings."""
+        """Up to ten seconds of one voice during the call: its text for the call screen (owner,
+        24 Oct). Since 25 Nov the same voice's next waiting pieces of the same twenty seconds come
+        along, read in one pass. Removed either way; the transcript after the call uses the full
+        recordings."""
         self.last_live = time.monotonic()
+        pieces = [piece]
         try:
-            text = self._words(piece)
-            self.main.rpc("engine_live_piece_done", {"p_id": piece["id"], "p_text": text})
+            more = self.main.rpc("engine_claim_next_live_pieces", {"p_after": piece["id"]})
+            pieces += more.get("pieces") or []
+            for one, text in zip(pieces, self._words(piece, pieces), strict=True):
+                self.main.rpc("engine_live_piece_done", {"p_id": one["id"], "p_text": text})
             # ponytail: no form work here (17 Nov). A form fill per ten-second piece held the next
             # pieces back for minutes. Live coverage (form.coverage and
             # engine_record_provisional_coverage) can join the live worker (18 Nov) later, as
             # plans/structured-massage-forms.md step 6 says.
         except Exception as exc:
             log_event("live_piece.failed", exception_type=type(exc).__name__)
-            self.main.rpc("engine_live_piece_failed", {"p_id": piece["id"]})
+            for one in pieces:  # those already done stay done
+                self.main.rpc("engine_live_piece_failed", {"p_id": one["id"]})
         finally:
-            self._remove_live_file(piece["storage_path"])
+            for one in pieces:
+                self._remove_live_file(one["storage_path"])
 
     def process_voice_note(self, note: dict[str, Any]) -> None:
         """The doctor's spoken note (owner's test team, 23 Nov): its words join their written notes.
         The recording is removed either way."""
         try:
-            text = self._words(note)
+            text = self._words(note, [note])[0]
             self.main.rpc("engine_voice_note_done", {"p_id": note["id"], "p_text": text})
         except Exception as exc:
             log_event("voice_note.failed", exception_type=type(exc).__name__)
@@ -297,18 +312,20 @@ class Engine:
         finally:
             self._remove_live_file(note["storage_path"])
 
-    def _words(self, recording: dict[str, Any]) -> str:
-        """What was said in a short recording (a live piece or a voice note), in one line."""
-        data = self.main.download(recording["storage_path"])
+    def _words(self, first: dict[str, Any], recordings: list[dict[str, Any]]) -> list[str]:
+        """What was said in each short recording of one voice (live pieces or a voice note), each
+        in one line. `first` carries the consultation and its language."""
         self.settings.work_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=self.settings.work_dir) as folder:
-            path = Path(folder) / "recording"
-            path.write_bytes(data)
-            hints = self._hints(recording.get("consultation_id"))
-            heard = transcribe_track(
-                path, recording.get("language"), self.settings, lambda: False, hints=hints
-            )
-        return " ".join(s.text for s in heard.segments if not s.possibly_not_speech)
+            paths = [Path(folder) / f"recording-{n}" for n in range(len(recordings))]
+            for path, recording in zip(paths, recordings, strict=True):
+                path.write_bytes(self.main.download(recording["storage_path"]))
+            audio = [decode_audio(str(path), sampling_rate=SAMPLE_RATE) for path in paths]
+        hints = self._hints(first.get("consultation_id"))
+        heard = transcribe_track(
+            np.concatenate(audio), first.get("language"), self.settings, lambda: False, hints=hints
+        )
+        return said_in_each(heard, [len(samples) for samples in audio])
 
     def _hints(self, consultation_id: str | None) -> list[str]:
         """The consultation's names and the spellings its practitioner taught, for the speech

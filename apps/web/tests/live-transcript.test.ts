@@ -50,6 +50,29 @@ describe("a live piece", () => {
     expect(data).toEqual([{ speaker: "patient", seq: 0, offset_seconds: 0.4, text: "Budím sa o tretej.", status: "done" }]);
   });
 
+  it("comes with the same voice's next pieces of the same twenty seconds, read in one pass (25 Nov)", async () => {
+    const id = await consultation();
+    await send(id, "patient", 0, 0);
+    await send(id, "practitioner", 0, 1);
+    await send(id, "patient", 1, 4.5);
+    await send(id, "patient", 2, 19.9);
+    await send(id, "patient", 3, 20); // would make the pass longer than the speech model's 30 seconds
+    const first = await claim(id);
+    expect(first).toMatchObject({ speaker: "patient", storage_path: pathOf(id, "patient", 0) });
+    const next = await rpc(engine.client, "engine_claim_next_live_pieces", { p_after: first!.id });
+    expect(next).toEqual({ ok: true, pieces: [
+      { id: expect.any(String), storage_path: pathOf(id, "patient", 1) },
+      { id: expect.any(String), storage_path: pathOf(id, "patient", 2) },
+    ] });
+    expect(await rpc(engine.client, "engine_claim_next_live_pieces", { p_after: first!.id })).toEqual({ ok: true, pieces: [] }); // taken
+    expect(await rpc(eva.client, "engine_claim_next_live_pieces", { p_after: first!.id })).toMatchObject({ ok: false, error_category: "NOT_AN_ENGINE" });
+    for (const piece of [first!, ...(next.pieces as { id: string }[])]) {
+      expect(await rpc(engine.client, "engine_live_piece_done", { p_id: piece.id, p_text: "" })).toEqual({ ok: true });
+    }
+    expect(await rpc(engine.client, "engine_claim_next_live_pieces", { p_after: first!.id })).toMatchObject({ ok: false, error_category: "NOT_FOUND" }); // read already
+    expect((await claim(id))!.speaker).toBe("practitioner");
+  });
+
   it("records when its words were written, so the live delay can be measured (17 Nov)", async () => {
     const id = await consultation();
     await send(id, "practitioner", 0, 0);

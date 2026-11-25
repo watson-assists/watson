@@ -6,7 +6,9 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+import numpy as np
 from faster_whisper import WhisperModel, decode_audio
+from numpy.typing import NDArray
 
 from .config import DETECTABLE_LANGUAGES, Settings
 from .errors import ErrorCategory, Stopped, WorkerError
@@ -56,20 +58,21 @@ def hotwords(vocabulary: str, hints: Sequence[str]) -> str | None:
 
 
 def transcribe_track(
-    path: Path,
+    path: Path | NDArray[np.float32],
     language: str | None,
     settings: Settings,
     should_stop: Callable[[], bool],
     hints: Sequence[str] = (),
 ) -> TrackTranscription:
-    """Transcribes one speaker's audio. `language=None` means "mixed or unsure"."""
+    """Transcribes one speaker's audio, a file or samples at SAMPLE_RATE. `language=None` means
+    "mixed or unsure"."""
     if not settings.model_path.is_dir():
         raise WorkerError(ErrorCategory.TRANSCRIPTION_MODEL_UNAVAILABLE)
     try:
         model = _load(
             str(settings.model_path), settings.device, settings.compute_type, settings.cpu_threads
         )
-        audio = decode_audio(str(path), sampling_rate=SAMPLE_RATE)
+        audio = path if isinstance(path, np.ndarray) else decode_audio(str(path), SAMPLE_RATE)
         probability = None
         if language is None:
             # Detection chooses only among the languages we support (section 12.2).
@@ -111,3 +114,18 @@ def transcribe_track(
         language_probability=probability,
         duration_seconds=round(len(audio) / SAMPLE_RATE, 2),
     )
+
+
+def said_in_each(heard: TrackTranscription, lengths: Sequence[int]) -> list[str]:
+    """What was said in each of one voice's short recordings, read together in one pass (owner,
+    25 Nov: the speech model reads any recording as a 30-second window, so ten short ones cost ten
+    windows). `lengths` in samples, in order. A sentence belongs to the recording its middle falls
+    in."""
+    ends = np.cumsum(lengths) / SAMPLE_RATE
+    said: list[list[str]] = [[] for _ in lengths]
+    for segment in heard.segments:
+        if not segment.possibly_not_speech:
+            middle = (segment.start + segment.end) / 2
+            where = min(int(np.searchsorted(ends, middle, side="right")), len(lengths) - 1)
+            said[where].append(segment.text)
+    return [" ".join(words) for words in said]

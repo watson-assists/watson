@@ -612,7 +612,10 @@ def _no_live_pieces() -> None:
     )
 
 
-def _live_piece(cara: tuple[str, str, Client], data: bytes) -> tuple[str, str]:
+def _live_pieces(
+    cara: tuple[str, str, Client], pieces: list[tuple[str, float, bytes]]
+) -> tuple[str, list[str]]:
+    """A consultation in progress and its pieces (speaker, offset in seconds, audio), in order."""
     user_id, _, client = cara
     created = _data(
         client.rpc(
@@ -625,21 +628,30 @@ def _live_piece(cara: tuple[str, str, Client], data: bytes) -> tuple[str, str]:
         )
     )
     consultation_id: str = created["consultation_id"]
-    path = f"{user_id}/{consultation_id}/live/patient-0"
-    client.storage.from_("audio").upload(path, data, {"content-type": "audio/wav"})
-    added = _data(
-        client.rpc(
-            "add_live_piece",
-            {
-                "p_consultation_id": consultation_id,
-                "p_speaker": "patient",
-                "p_seq": 0,
-                "p_offset_seconds": 0,
-            },
+    paths, seqs = [], {"patient": 0, "practitioner": 0}
+    for speaker, offset, data in pieces:
+        seq, seqs[speaker] = seqs[speaker], seqs[speaker] + 1
+        path = f"{user_id}/{consultation_id}/live/{speaker}-{seq}"
+        client.storage.from_("audio").upload(path, data, {"content-type": "audio/wav"})
+        added = _data(
+            client.rpc(
+                "add_live_piece",
+                {
+                    "p_consultation_id": consultation_id,
+                    "p_speaker": speaker,
+                    "p_seq": seq,
+                    "p_offset_seconds": offset,
+                },
+            )
         )
-    )
-    assert added == {"ok": True}, added
-    return consultation_id, path
+        assert added == {"ok": True}, added
+        paths.append(path)
+    return consultation_id, paths
+
+
+def _live_piece(cara: tuple[str, str, Client], data: bytes) -> tuple[str, str]:
+    consultation_id, paths = _live_pieces(cara, [("patient", 0, data)])
+    return consultation_id, paths[0]
 
 
 def test_a_live_piece_becomes_text_for_the_call_screen_and_is_removed(
@@ -655,6 +667,38 @@ def test_a_live_piece_becomes_text_for_the_call_screen_and_is_removed(
     assert len(rows[0]["text"].split()) >= 3
     with pytest.raises(StorageException):  # removed once read
         _admin().storage.from_("audio").download(path)
+
+
+def test_one_voices_waiting_pieces_are_read_together_each_with_its_own_words(
+    engine: Engine, cara: tuple[str, str, Client]
+) -> None:
+    """Owner, 25 Nov: the live transcript's delay. The same voice's next pieces within twenty
+    seconds are read in one pass; each still gets the words said in it."""
+    _no_live_pieces()
+    consultation_id, paths = _live_pieces(
+        cara,
+        [
+            ("patient", 0, SPEECH),
+            ("practitioner", 1, SPEECH),
+            ("patient", 7.5, SILENCE),
+            ("patient", 12.5, SPEECH),
+        ],
+    )
+    assert engine.run_live_once()
+    rows = _data(
+        cara[2]
+        .table("live_pieces")
+        .select("speaker, seq, status, text")
+        .eq("consultation_id", consultation_id)
+    )
+    read = {(r["speaker"], r["seq"]): (r["status"], len((r["text"] or "").split())) for r in rows}
+    assert read[("practitioner", 0)] == ("waiting", 0)  # another voice: the next pass
+    speech, silence, more_speech = (read[("patient", n)] for n in range(3))
+    assert speech[0] == silence[0] == more_speech[0] == "done", rows
+    assert speech[1] >= 3 and silence[1] == 0 and more_speech[1] >= 3, rows
+    for path in paths[0], paths[2], paths[3]:  # removed once read
+        with pytest.raises(StorageException):
+            _admin().storage.from_("audio").download(path)
 
 
 def test_a_voice_note_is_written_into_the_doctors_notes_and_removed(
